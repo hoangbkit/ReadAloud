@@ -252,10 +252,14 @@ PY
 
 mkdir -p "${ASSET_ROOT}"
 
+STAGE_ROOT="${TMP_DIR}/staged"
+mkdir -p "${STAGE_ROOT}"
+
 verified_count=0
 downloaded_count=0
 
-while IFS=$'\t' read -r expected_sha expected_bytes local_path remote_path; do
+while IFS=
+\t' read -r expected_sha expected_bytes local_path remote_path; do
   [[ -n "${local_path}" ]] || continue
 
   destination="${ASSET_ROOT}/${local_path}"
@@ -277,18 +281,16 @@ while IFS=$'\t' read -r expected_sha expected_bytes local_path remote_path; do
     exit 1
   fi
 
-  temp_file="${TMP_DIR}/download-${downloaded_count}"
-  download_url "${remote_path}" "${temp_file}"
+  staged_file="${STAGE_ROOT}/${local_path}"
+  mkdir -p "$(dirname "${staged_file}")"
+  download_url "${remote_path}" "${staged_file}"
 
-  if ! verify_file "${temp_file}" "${expected_sha}" "${expected_bytes}"; then
+  if ! verify_file "${staged_file}" "${expected_sha}" "${expected_bytes}"; then
     echo "error: downloaded asset failed verification: ${local_path}" >&2
     exit 1
   fi
 
-  mkdir -p "$(dirname "${destination}")"
-  mv "${temp_file}" "${destination}"
-  echo "downloaded + verified: ${local_path}"
-
+  echo "staged + verified: ${local_path}"
   downloaded_count=$((downloaded_count + 1))
   verified_count=$((verified_count + 1))
 done < "${ASSET_LIST}"
@@ -307,13 +309,30 @@ if [[ -e "${MANIFEST_DESTINATION}" ]]; then
 elif [[ "${MODE}" == "verify" ]]; then
   echo "error: missing asset: KokoroRuntimeManifest.json" >&2
   exit 1
-else
-  mv "${SUBSET_MANIFEST}" "${MANIFEST_DESTINATION}"
-  echo "generated + verified: KokoroRuntimeManifest.json"
+fi
+
+if [[ "${MODE}" == "download" ]]; then
+  while IFS=
+\t' read -r _ _ local_path _; do
+    [[ -n "${local_path}" ]] || continue
+
+    staged_file="${STAGE_ROOT}/${local_path}"
+    [[ -f "${staged_file}" ]] || continue
+
+    destination="${ASSET_ROOT}/${local_path}"
+    mkdir -p "$(dirname "${destination}")"
+    mv "${staged_file}" "${destination}"
+    echo "installed: ${local_path}"
+  done < "${ASSET_LIST}"
+
+  if [[ ! -e "${MANIFEST_DESTINATION}" ]]; then
+    mv "${SUBSET_MANIFEST}" "${MANIFEST_DESTINATION}"
+    echo "installed: KokoroRuntimeManifest.json"
+  fi
 fi
 
 echo
 echo "Kokoro assets verified: ${verified_count}"
 if [[ "${MODE}" == "download" ]]; then
-  echo "New assets downloaded: ${downloaded_count}"
+  echo "New assets installed: ${downloaded_count}"
 fi
