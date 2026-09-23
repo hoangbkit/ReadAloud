@@ -17,6 +17,10 @@ configs:
   Debug: debug
   Release: release
 
+packages:
+  KokoroTTS:
+    path: Vendor/kokoro-coreml/swift-tts
+
 targets:
   ReadAloud:
     type: application
@@ -35,6 +39,9 @@ targets:
           - $(SRCROOT)/Resources/Kokoro
           - $(SRCROOT)/scripts/validate-kokoro-assets-for-build.sh
         basedOnDependencyAnalysis: false
+    dependencies:
+      - package: KokoroTTS
+        product: KokoroTTS
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.hoangbkit.readaloud
