@@ -2,11 +2,7 @@
 
 ## Goal
 
-Build a minimal iOS prototype whose only purpose is to answer one question:
-
-> Can Kokoro 82M Core ML sustain smooth real-time read-aloud playback on an iPhone SE (2nd generation, A13) without audio underruns, excessive startup delay, memory pressure, or thermal degradation?
-
-This is a benchmark/prototype app, not a production reader. Keep the implementation intentionally small and measurable.
+Build a minimal iOS app that can read text continuously with Kokoro 82M Core ML and expose enough runtime metrics to judge real-time performance on-device.
 
 ## Fixed project configuration
 
@@ -16,8 +12,8 @@ This is a benchmark/prototype app, not a production reader. Keep the implementat
 - Apple development team: `J458WW3452`
 - Project generation: XcodeGen
 - Signing: automatic
-- Primary test device: iPhone SE (2nd generation / A13)
 - TTS: Kokoro 82M, Core ML staged iPhone pipeline
+- Phonemization: upstream/native Misaki Swift path
 - Audio: 24 kHz mono PCM
 - Initial language scope: English only
 - Minimum OS: iOS 18.0 unless an upstream dependency forces a higher target
@@ -29,15 +25,15 @@ Use the current staged Core ML implementation and Swift SDK from:
 - https://github.com/mattmireles/kokoro-coreml
 - https://huggingface.co/mattmireles/kokoro-coreml
 
-Pin the model/runtime revision used by the prototype. Do not download from a moving `main` revision at build time.
+Pin the model/runtime revision used by the app. Do not download from a moving `main` revision at build time.
 
-The current upstream SDK already owns raw-text preparation, Misaki phonemization, chunking, model loading, and AVFoundation-compatible PCM creation. Prefer using that path before writing custom G2P or Kokoro inference code.
+Prefer the upstream pipeline for text preparation, Misaki phonemization, chunking/model inputs, model loading, and Kokoro inference. Keep our code focused on app integration, streaming, playback, and metrics.
 
 ---
 
-## Phase 0 — Repository and XcodeGen scaffold
+## Phase 0 — XcodeGen app scaffold
 
-Create the smallest buildable SwiftUI iOS app.
+Create the minimal SwiftUI iOS app and repository structure.
 
 ### Deliverables
 
@@ -46,7 +42,8 @@ Create the smallest buildable SwiftUI iOS app.
 - `ReadAloud/Features/Reader/ReaderView.swift`
 - `ReadAloud/Features/Reader/ReaderViewModel.swift`
 - `ReadAloud/TTS/`
-- `ReadAloud/Benchmark/`
+- `ReadAloud/Audio/`
+- `ReadAloud/Metrics/`
 - `Resources/Kokoro/`
 - `scripts/`
 - `.gitignore`
@@ -54,59 +51,53 @@ Create the smallest buildable SwiftUI iOS app.
 
 ### XcodeGen requirements
 
-Configure the application target with:
-
 ```yaml
 PRODUCT_BUNDLE_IDENTIFIER: com.hoangbkit.readaloud
 DEVELOPMENT_TEAM: J458WW3452
 CODE_SIGN_STYLE: Automatic
 ```
 
-Use XcodeGen as the source of truth. Do not manually maintain or commit hand-edited Xcode project settings.
+Use XcodeGen as the source of truth. Do not maintain a hand-edited Xcode project.
 
-The generated app must build and install on the SE2 before any Kokoro work begins.
-
-### Acceptance criteria
+### Done when
 
 - `xcodegen generate` succeeds.
 - App builds from CLI.
-- App installs and launches on the SE2.
-- Bundle ID and team ID are correct in the generated project.
+- App launches on a physical iPhone.
+- Bundle ID and team ID are correct.
 
 ---
 
-## Phase 1 — Reproducible Kokoro asset download
+## Phase 1 — Reproducible Kokoro assets
 
-Add a Bash-based asset pipeline so a clean checkout can obtain the exact Kokoro resources used by the benchmark.
+Add a Bash pipeline that downloads the exact model and voice assets required by the app.
 
 ### Files
 
 - `scripts/download-kokoro-assets.sh`
+- `scripts/verify-kokoro-assets.sh`
 - `scripts/kokoro-checksums.sha256`
-- optionally `scripts/verify-kokoro-assets.sh`
 
-### Script requirements
+### Requirements
 
-The downloader must:
+The script must:
 
 1. pin an immutable upstream revision;
-2. download only the model buckets and voices selected for this prototype;
-3. download into a temporary directory first;
-4. verify SHA-256 for every downloaded artifact;
-5. fail immediately on a missing file or checksum mismatch;
-6. move verified files into `Resources/Kokoro/` only after the whole set passes;
+2. download only required model buckets and voices;
+3. download to a temporary directory first;
+4. verify SHA-256 for every artifact;
+5. fail on missing files or checksum mismatch;
+6. move files into `Resources/Kokoro/` only after all verification succeeds;
 7. be idempotent;
-8. support a verification-only mode;
-9. print the pinned revision and verified asset list;
+8. support verification-only use;
+9. print the pinned revision and verified files;
 10. never silently replace a mismatched local file.
 
-Use macOS-provided tools where possible: `curl`, `shasum -a 256`, `mktemp`.
-
-Do not depend on "latest" assets. Keep the expected hashes in the repository so a future upstream change cannot silently alter benchmark results.
+Use standard macOS tools where possible: `curl`, `shasum -a 256`, and `mktemp`.
 
 ### Initial asset scope
 
-Bundle the fixed-duration Core ML paths needed to test:
+Bundle the Core ML duration buckets used by the upstream iPhone pipeline:
 
 - 3 s
 - 7 s
@@ -114,31 +105,25 @@ Bundle the fixed-duration Core ML paths needed to test:
 - 15 s
 - 30 s
 
-Start with a very small voice set so voice assets do not distort app-size or memory measurements. Suggested benchmark voices:
+Bundle a small fixed voice set initially:
 
 - `af_heart`
 - one additional female English voice
 - one male English voice
 
-The exact three voices should be pinned in the checksum manifest.
+Pin all voice assets in the checksum manifest.
 
-### Git policy
+### Done when
 
-Large downloaded model binaries should not need to be committed to Git if the download script can recreate them exactly. The local resource directory may be ignored while its directory structure/manifest remains tracked.
-
-### Acceptance criteria
-
-A fresh clone can run one command and produce a byte-for-byte verified Kokoro resource bundle.
+A clean checkout can run one command and recreate the exact verified Kokoro resource set.
 
 ---
 
-## Phase 2 — Bundle models and voices with XcodeGen
+## Phase 2 — XcodeGen model and voice bundling
 
-Make the downloaded resources part of the generated application bundle.
+Make all verified Kokoro assets available from the application bundle.
 
 ### Resource layout
-
-Target a predictable structure such as:
 
 ```text
 Resources/
@@ -153,266 +138,162 @@ Resources/
     └── manifest.json
 ```
 
-The exact layout may follow the upstream Swift SDK bundle contract if that avoids adaptation code.
+Follow the upstream SDK resource layout instead if doing so removes adaptation code.
 
-### XcodeGen behavior
+### Requirements
 
-- Declare the Kokoro resource directory in `project.yml`.
-- Ensure model files and voice embeddings are present in the built app.
-- Prefer precompiled `.mlmodelc` resources when the upstream tooling supports them reliably, to reduce first-run compilation work.
-- If raw `.mlpackage` files must be bundled, compile/copy them in a deterministic way and keep writable compiled artifacts outside the read-only app bundle.
-- Add a build-time validation step that fails with a clear message when required assets are missing.
+- Declare Kokoro resources in `project.yml`.
+- Ensure all required models and voices are copied into the built app.
+- Prefer precompiled `.mlmodelc` assets when the upstream flow supports them reliably.
+- Add a clear build-time failure when expected assets are missing.
+- Add a small resource loader that resolves model and voice URLs from `Bundle.main`.
 
-### Acceptance criteria
+### Done when
 
-On the physical SE2, the app can enumerate every expected model bucket and voice directly from its own bundle with airplane mode enabled.
+The app can enumerate and resolve every bundled model bucket and voice with no network access.
 
 ---
 
-## Phase 3 — Minimal Kokoro Core ML runtime
+## Phase 3 — Kokoro Core ML engine
 
-Integrate the upstream Swift runtime with as little custom inference code as possible.
+Integrate the upstream Kokoro Swift/Core ML pipeline behind a thin app-owned wrapper.
 
-### Components
-
-Create a small wrapper layer, for example:
+### App-owned wrapper
 
 ```text
 KokoroEngine
 ├── load()
-├── prewarm(text:voice:)
+├── warmUp(text:voice:)
 ├── synthesize(text:voice:)
+├── availableVoices
 └── unload()
 ```
 
-The wrapper should expose timing information without hiding upstream errors.
+### Responsibilities
+
+Upstream owns:
+
+- text preparation;
+- Misaki phonemization;
+- Kokoro token/model input preparation;
+- staged Core ML inference;
+- voice embedding handling;
+- raw PCM generation.
+
+ReadAloud owns:
+
+- lifecycle;
+- resource lookup;
+- async execution;
+- cancellation;
+- error mapping;
+- timing capture;
+- interface consumed by the reader pipeline.
 
 ### Runtime rules
 
-- Use the staged iPhone compute policy supported by the Core ML implementation.
-- Do not force all stages onto `.all` / ANE just because it sounds faster.
-- Keep loaded model instances reusable across utterances.
-- Perform an explicit prewarm before warm benchmark runs.
-- Keep synthesis off the main actor.
-- Keep UI state updates on the main actor.
-- Return raw timing data together with generated PCM.
+- Use the upstream staged iPhone compute policy.
+- Keep model instances loaded and reusable.
+- Keep inference off the main actor.
+- Keep UI state changes on the main actor.
+- Do not rewrite G2P or model inference unless an upstream limitation requires it.
 
-### Acceptance criteria
+### Done when
 
-The SE2 can synthesize a known sentence to audible speech locally with no network access.
+The app can turn typed English text into audible Kokoro speech completely offline.
 
 ---
 
-## Phase 4 — Reader and streaming playback prototype
+## Phase 4 — Continuous read-aloud pipeline
 
-Build only enough UI to reproduce real read-aloud behavior.
+Build the actual reader behavior around Kokoro.
 
-### UI
-
-Single-screen prototype:
-
-- large editable text area;
-- bundled voice picker;
-- `Load Models`;
-- `Warm Up`;
-- `Read`;
-- `Stop`;
-- optional chunk strategy picker;
-- live metrics panel;
-- simple event log.
-
-Ship a few long built-in sample passages so repeated benchmark runs use identical text.
-
-### Reading pipeline
-
-Use a producer/consumer design:
+### Pipeline
 
 ```text
-long text
-   ↓
-sentence-aware chunker
-   ↓
-bucket selection
-   ↓
-Kokoro synthesis
-   ↓
-PCM queue
-   ↓
+Text
+  ↓
+sentence-aware chunk scheduler
+  ↓
+KokoroEngine
+  ↓
+PCM buffer
+  ↓
+read-ahead queue
+  ↓
 AVAudioEngine / AVAudioPlayerNode
 ```
 
-For the first experiment:
+### Requirements
 
-- make the first chunk intentionally short to minimize time-to-first-audio;
-- synthesize later chunks while the current chunk is playing;
-- maintain at least one ready-ahead PCM buffer when possible;
-- never synthesize an entire article before playback begins.
+- Start with a short first chunk for low startup latency.
+- Generate the next chunk while the current chunk is playing.
+- Keep at least one ready-ahead buffer when possible.
+- Select the smallest suitable upstream duration bucket for each chunk.
+- Preserve sentence boundaries where practical.
+- Support immediate cancellation.
+- Flush pending synthesis/audio cleanly on Stop.
+- Reuse already-loaded models between reads.
+- Never synthesize the full article before playback begins.
 
-Start with a policy roughly equivalent to:
+A reasonable initial bucket policy:
 
-- first utterance → 3 s bucket;
-- steady-state short utterance → 7 s bucket;
-- larger sentence group → 10 s or 15 s bucket;
-- 30 s bucket only as a stress test, not the default reader path.
+- first chunk → 3 s;
+- normal short chunk → 7 s;
+- larger sentence group → 10 s or 15 s;
+- 30 s only when the text genuinely requires it.
 
-The upstream chunker should be the baseline. Only add a custom sentence/bucket policy if measurements show it is necessary.
+### Done when
 
-### Acceptance criteria
-
-A multi-minute passage plays continuously from local Kokoro output and can be stopped immediately.
+A multi-minute text can be read continuously, with synthesis and playback operating concurrently and Stop working immediately.
 
 ---
 
-## Phase 5 — Benchmark instrumentation
+## Phase 5 — Reader UI and live performance metrics
 
-The app must measure performance rather than rely on subjective impressions.
+Finish the prototype UI and expose the measurements needed while using it.
 
-### Record per synthesis
+### Single-screen UI
 
-- input character count;
-- token/phoneme count if available;
-- selected model bucket;
-- voice;
-- synthesis wall time;
+Include:
+
+- editable text area;
+- bundled voice picker;
+- `Read`;
+- `Stop`;
+- optional `Warm Up`;
+- current state: loading / synthesizing / playing / stopped / error;
+- live metrics panel;
+- compact event log;
+- a few built-in long sample passages for repeatable use.
+
+### Live metrics
+
+Capture and display at minimum:
+
+- model load time;
+- first-audio latency;
+- synthesis time per chunk;
 - generated audio duration;
 - real-time factor;
-- queue depth before synthesis;
-- queue depth after synthesis;
-- underrun occurrence;
-- warm vs cold run.
+- selected duration bucket;
+- current/ready queue depth;
+- underrun count;
+- current thermal state.
 
-Calculate:
+Use:
 
 ```text
 RTF = synthesis wall time / generated audio duration
 ```
 
-Interpretation:
+Use a monotonic clock such as `ContinuousClock` for latency measurements.
 
-- RTF < 1.0: generation is faster than playback.
-- RTF = 1.0: no performance headroom.
-- RTF > 1.0: cannot sustain real-time playback without a growing initial buffer.
+Keep the UI diagnostic rather than polished; this is still a prototype.
 
-Also capture:
+### Done when
 
-- model load time;
-- prewarm time;
-- tap-to-first-audio latency;
-- peak/approximate process memory where practical;
-- current `ProcessInfo.processInfo.thermalState`;
-- audio underrun count;
-- total test duration.
-
-Use `ContinuousClock` or another monotonic clock for latency measurements.
-
-### Output
-
-Show a live summary in the app and emit a machine-readable result, preferably JSON, that can be copied or shared after each benchmark session.
-
----
-
-## Phase 6 — SE2 benchmark matrix
-
-Run all important measurements on the physical SE2 in Release configuration.
-
-Debug builds are not valid for the final performance decision.
-
-### A. Cold-start test
-
-Measure:
-
-- fresh process launch;
-- model load;
-- first prewarm;
-- first speech.
-
-Repeat after force-quitting the app.
-
-### B. Warm single-utterance test
-
-For each relevant bucket:
-
-- 3 s;
-- 7 s;
-- 10 s;
-- 15 s;
-- 30 s;
-
-run at least five warm iterations with the same voice and text class.
-
-Report median and worst observed synthesis time and RTF.
-
-### C. Real reading test
-
-Read a fixed 10-minute passage using the streaming queue.
-
-Measure:
-
-- time to first audio;
-- number of underruns;
-- average and worst RTF;
-- minimum observed ready-ahead audio;
-- memory behavior;
-- thermal state changes.
-
-### D. Voice comparison
-
-Repeat the steady-state test across the bundled voices to detect meaningful voice-specific cost.
-
-### E. Chunk-policy comparison
-
-Compare at least:
-
-1. sentence-by-sentence;
-2. short first chunk + 7 s steady-state;
-3. short first chunk + 10/15 s adaptive steady-state.
-
-Keep everything else constant.
-
----
-
-## Phase 7 — Decision criteria and report
-
-The prototype ends with a written benchmark report. Do not turn it into a production app before answering the performance question.
-
-### Minimum pass
-
-Kokoro is considered viable for real-time SE2 reading if a 10-minute Release-mode run:
-
-- has zero playback underruns after playback begins;
-- maintains sustained warm RTF below 1.0;
-- does not trend toward an ever-growing synthesis backlog;
-- avoids memory termination;
-- remains usable as the device heats up.
-
-### Preferred target
-
-For enough safety margin to use in a real reader:
-
-- steady-state median RTF <= 0.7;
-- warm first-chunk synthesis around or below 1.5 s;
-- no underruns in the 10-minute test;
-- stable or bounded memory;
-- no severe thermal-state-induced collapse.
-
-Treat these as prototype targets, not marketing claims.
-
-### Final report
-
-Add `BENCHMARK.md` containing:
-
-- exact SE2 model and iOS version;
-- app commit SHA;
-- Kokoro upstream revision;
-- model checksum set;
-- voice;
-- Release build configuration;
-- benchmark table;
-- chosen chunk policy;
-- cold-start result;
-- 10-minute sustained result;
-- memory/thermal observations;
-- conclusion: viable, viable with buffering, or not viable on A13.
+The app is a complete standalone prototype: launch it, type or select text, choose a voice, tap Read, hear continuous local Kokoro speech, stop at any time, and observe live performance metrics.
 
 ---
 
@@ -423,7 +304,6 @@ ReadAloud/
 ├── project.yml
 ├── README.md
 ├── PLAN.md
-├── BENCHMARK.md                 # added after measurements
 ├── scripts/
 │   ├── download-kokoro-assets.sh
 │   ├── verify-kokoro-assets.sh
@@ -441,15 +321,16 @@ ReadAloud/
     │   ├── KokoroEngine.swift
     │   ├── KokoroResources.swift
     │   └── SpeechChunk.swift
-    └── Benchmark/
-        ├── BenchmarkRecorder.swift
-        ├── BenchmarkResult.swift
-        └── BenchmarkView.swift
+    ├── Audio/
+    │   └── SpeechPlaybackQueue.swift
+    └── Metrics/
+        ├── PerformanceMetrics.swift
+        └── MetricsView.swift
 ```
 
 ## Non-goals
 
-Do not add these until the SE2 benchmark is complete:
+Do not add these to this prototype:
 
 - document import;
 - EPUB/PDF extraction;
@@ -457,10 +338,7 @@ Do not add these until the SE2 benchmark is complete:
 - accounts;
 - purchases/paywall;
 - persistence/database;
-- background audio polish;
-- production settings architecture;
 - analytics;
 - broad localization;
-- model download UI.
-
-The prototype should remain disposable. Its job is to produce trustworthy A13 measurements quickly.
+- model download UI;
+- production-level settings architecture.
