@@ -6,6 +6,20 @@ source "${SCRIPT_DIR}/kokoro-pins.sh"
 
 ASSET_ROOT="${SRCROOT}/Resources/Kokoro"
 MANIFEST="${ASSET_ROOT}/KokoroRuntimeManifest.json"
+SDK_ROOT="${SRCROOT}/Vendor/kokoro-coreml"
+
+if [[ ! -d "${SDK_ROOT}/.git" ]]; then
+  echo "error: Kokoro SDK checkout is missing. Run: bash scripts/download-kokoro-sdk.sh" >&2
+  exit 1
+fi
+
+ACTUAL_SDK_COMMIT="$(git -C "${SDK_ROOT}" rev-parse HEAD)"
+if [[ "${ACTUAL_SDK_COMMIT}" != "${KOKORO_SDK_COMMIT}" ]]; then
+  echo "error: Kokoro SDK checkout does not match the pinned commit" >&2
+  echo "expected: ${KOKORO_SDK_COMMIT}" >&2
+  echo "actual:   ${ACTUAL_SDK_COMMIT}" >&2
+  exit 1
+fi
 
 if [[ ! -f "${MANIFEST}" ]]; then
   echo "error: Kokoro assets are missing. Run: bash scripts/download-kokoro-assets.sh" >&2
