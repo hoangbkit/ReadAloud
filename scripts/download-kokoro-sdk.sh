@@ -6,8 +6,10 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VENDOR_ROOT="${REPO_ROOT}/Vendor"
 SDK_ROOT="${VENDOR_ROOT}/kokoro-coreml"
 
-SDK_REPO="https://github.com/mattmireles/kokoro-coreml.git"
-SDK_COMMIT="0594fcca424fa4228f4627ee399fbfd3e066eac6"
+source "${SCRIPT_DIR}/kokoro-pins.sh"
+
+SDK_REPO="${KOKORO_SDK_REPO}"
+SDK_COMMIT="${KOKORO_SDK_COMMIT}"
 
 for command in git mktemp; do
   if ! command -v "${command}" >/dev/null 2>&1; then
