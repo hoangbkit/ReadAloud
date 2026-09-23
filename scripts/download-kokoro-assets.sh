@@ -254,7 +254,7 @@ mkdir -p "${ASSET_ROOT}"
 
 STAGE_ROOT="${TMP_DIR}/staged"
 mkdir -p "${STAGE_ROOT}"
-TAB="$(printf '\\t')"
+TAB="$(printf '\t')"
 
 verified_count=0
 downloaded_count=0
