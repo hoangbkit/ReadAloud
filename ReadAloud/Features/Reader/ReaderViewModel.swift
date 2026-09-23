@@ -70,8 +70,10 @@ final class ReaderViewModel {
             } catch ReadAloudPipeline.PipelineError.cancelled {
                 // Stop is an expected control path.
             } catch {
-                statusText = "Error: \(Self.message(for: error))"
-                appendEvent("Error: \(Self.message(for: error))")
+                if !Task.isCancelled {
+                    statusText = "Error: \(Self.message(for: error))"
+                    appendEvent("Error: \(Self.message(for: error))")
+                }
             }
 
             if !Task.isCancelled {
@@ -115,8 +117,10 @@ final class ReaderViewModel {
             } catch ReadAloudPipeline.PipelineError.cancelled {
                 // Stop is an expected control path.
             } catch {
-                statusText = "Error: \(Self.message(for: error))"
-                appendEvent("Error: \(Self.message(for: error))")
+                if !Task.isCancelled {
+                    statusText = "Error: \(Self.message(for: error))"
+                    appendEvent("Error: \(Self.message(for: error))")
+                }
             }
 
             if !Task.isCancelled {
