@@ -163,7 +163,7 @@ for package_path in required_packages:
 
     files = package.get("files") or []
     if not files:
-        raise SystemExit(f"package has no files in upstream manifest: {package_path)")
+        raise SystemExit(f"package has no files in upstream manifest: {package_path}")
 
     for entry in files:
         local_path = f"{package_path}/{entry['path']}"
