@@ -172,8 +172,6 @@ final class ReaderViewModel {
             let synthesisSeconds,
             let audioDurationSeconds,
             let realTimeFactor,
-            let queuedBuffers,
-            let queuedDurationSeconds,
             let firstAudioLatencySeconds,
             let underrun
         ):
@@ -183,8 +181,6 @@ final class ReaderViewModel {
             metrics.latestSynthesisSeconds = synthesisSeconds
             metrics.latestAudioDurationSeconds = audioDurationSeconds
             metrics.latestRealTimeFactor = realTimeFactor
-            metrics.queuedBuffers = queuedBuffers
-            metrics.queuedDurationSeconds = queuedDurationSeconds
 
             if let firstAudioLatencySeconds {
                 metrics.firstAudioLatencySeconds = firstAudioLatencySeconds

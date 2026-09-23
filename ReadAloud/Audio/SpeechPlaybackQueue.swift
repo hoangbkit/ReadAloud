@@ -35,6 +35,8 @@ final class SpeechPlaybackQueue {
     private var generation = 0
     private var queuedDurationSeconds = 0.0
 
+    var onSnapshotChange: ((Snapshot) -> Void)?
+
     init() {
         audioEngine.attach(playerNode)
         audioEngine.connect(
@@ -96,6 +98,8 @@ final class SpeechPlaybackQueue {
         if !playerNode.isPlaying {
             playerNode.play()
         }
+
+        notifySnapshotChange()
     }
 
     func waitUntilQueueDepthBelow(_ limit: Int) async {
@@ -141,6 +145,8 @@ final class SpeechPlaybackQueue {
             false,
             options: .notifyOthersOnDeactivation
         )
+
+        notifySnapshotChange()
     }
 
     private func didFinish(
@@ -158,11 +164,16 @@ final class SpeechPlaybackQueue {
             queuedDurationSeconds - duration
         )
 
+        notifySnapshotChange()
         resumeDepthWaiters()
 
         if pendingDurations.isEmpty {
             resumeDrainWaiters()
         }
+    }
+
+    private func notifySnapshotChange() {
+        onSnapshotChange?(snapshot)
     }
 
     private func resumeDepthWaiters() {

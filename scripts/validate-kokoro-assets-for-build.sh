@@ -26,8 +26,12 @@ expected_voices = [
     "voices/am_michael.bin",
 ]
 
-if manifest.get("bundle_profile") != "readaloud":
+if manifest.get("bundle_profile") != "custom":
     raise SystemExit("error: unexpected Kokoro runtime manifest profile")
+if manifest.get("hf_provenance_verified") is not True:
+    raise SystemExit("error: Kokoro runtime manifest provenance is not verified")
+if len(manifest.get("readaloud_source_manifest_sha256", "")) != 64:
+    raise SystemExit("error: missing ReadAloud source manifest digest")
 if manifest.get("buckets") != expected_buckets:
     raise SystemExit("error: Kokoro runtime manifest has unexpected bucket set")
 

@@ -27,8 +27,6 @@ final class ReadAloudPipeline {
             synthesisSeconds: Double,
             audioDurationSeconds: Double,
             realTimeFactor: Double,
-            queuedBuffers: Int,
-            queuedDurationSeconds: Double,
             firstAudioLatencySeconds: Double?,
             underrun: Bool
         )
@@ -60,15 +58,26 @@ final class ReadAloudPipeline {
     private let maxQueuedBuffers = 2
 
     private var readingTask: Task<Void, Error>?
-    private var sessionID: UUID?
+    private var activeOperationID: UUID?
 
     private(set) var state: State = .idle
     var onEvent: ((Event) -> Void)?
 
     init() {
+        let playback = SpeechPlaybackQueue()
+
         self.engine = KokoroEngine()
-        self.playback = SpeechPlaybackQueue()
+        self.playback = playback
         self.scheduler = SpeechChunkScheduler()
+
+        playback.onSnapshotChange = { [weak self] snapshot in
+            self?.onEvent?(
+                .queueChanged(
+                    queuedBuffers: snapshot.queuedBuffers,
+                    queuedDurationSeconds: snapshot.queuedDurationSeconds
+                )
+            )
+        }
     }
 
     func read(
@@ -76,7 +85,7 @@ final class ReadAloudPipeline {
         voice: KokoroEngine.Voice = .heart,
         speed: Float = 1.0
     ) async throws {
-        stop()
+        resetActiveOperation()
 
         let chunks = scheduler.chunks(
             for: text,
@@ -87,10 +96,10 @@ final class ReadAloudPipeline {
             throw PipelineError.emptyText
         }
 
-        let id = UUID()
+        let operationID = UUID()
         let readStart = ContinuousClock().now
 
-        sessionID = id
+        activeOperationID = operationID
         setState(.loading)
 
         let task = Task { @MainActor [weak self] in
@@ -102,7 +111,8 @@ final class ReadAloudPipeline {
                 chunks: chunks,
                 voice: voice,
                 speed: speed,
-                readStart: readStart
+                readStart: readStart,
+                operationID: operationID
             )
         }
 
@@ -117,36 +127,25 @@ final class ReadAloudPipeline {
                 }
             }
 
-            guard sessionID == id else {
-                throw PipelineError.cancelled
-            }
+            try requireActiveOperation(operationID)
 
             readingTask = nil
-            sessionID = nil
+            activeOperationID = nil
             setState(.finished)
         } catch is CancellationError {
-            if sessionID == id {
-                playback.stop()
-                readingTask = nil
-                sessionID = nil
-                setState(.idle)
-            }
-
+            finishCancellation(operationID)
+            throw PipelineError.cancelled
+        } catch PipelineError.cancelled {
+            finishCancellation(operationID)
             throw PipelineError.cancelled
         } catch KokoroEngine.EngineError.cancelled {
-            if sessionID == id {
-                playback.stop()
-                readingTask = nil
-                sessionID = nil
-                setState(.idle)
-            }
-
+            finishCancellation(operationID)
             throw PipelineError.cancelled
         } catch {
-            if sessionID == id {
+            if activeOperationID == operationID {
                 playback.stop()
                 readingTask = nil
-                sessionID = nil
+                activeOperationID = nil
                 setState(.failed(Self.message(for: error)))
             }
 
@@ -158,14 +157,19 @@ final class ReadAloudPipeline {
         voice: KokoroEngine.Voice = .heart,
         speed: Float = 1.0
     ) async throws -> Double {
-        stop()
+        resetActiveOperation()
+
+        let operationID = UUID()
+        activeOperationID = operationID
         setState(.loading)
 
         let clock = ContinuousClock()
         let loadStart = clock.now
 
         do {
+            try requireActiveOperation(operationID)
             try await engine.load()
+            try requireActiveOperation(operationID)
 
             onEvent?(
                 .modelLoaded(
@@ -180,28 +184,33 @@ final class ReadAloudPipeline {
                 speed: speed
             )
 
+            try requireActiveOperation(operationID)
+
             onEvent?(.warmUpFinished(seconds: result.elapsedSeconds))
+            activeOperationID = nil
             setState(.idle)
             return result.elapsedSeconds
         } catch is CancellationError {
-            setState(.idle)
+            finishCancellation(operationID)
+            throw PipelineError.cancelled
+        } catch PipelineError.cancelled {
+            finishCancellation(operationID)
             throw PipelineError.cancelled
         } catch KokoroEngine.EngineError.cancelled {
-            setState(.idle)
+            finishCancellation(operationID)
             throw PipelineError.cancelled
         } catch {
-            setState(.failed(Self.message(for: error)))
+            if activeOperationID == operationID {
+                activeOperationID = nil
+                setState(.failed(Self.message(for: error)))
+            }
+
             throw error
         }
     }
 
     func stop() {
-        sessionID = nil
-
-        readingTask?.cancel()
-        readingTask = nil
-
-        playback.stop()
+        resetActiveOperation()
         setState(.idle)
         onEvent?(.stopped)
     }
@@ -211,22 +220,20 @@ final class ReadAloudPipeline {
         await engine.unload()
     }
 
-    var playbackSnapshot: SpeechPlaybackQueue.Snapshot {
-        playback.snapshot
-    }
-
     private func run(
         chunks: [SpeechChunk],
         voice: KokoroEngine.Voice,
         speed: Float,
-        readStart: ContinuousClock.Instant
+        readStart: ContinuousClock.Instant,
+        operationID: UUID
     ) async throws {
-        try Task.checkCancellation()
+        try requireActiveOperation(operationID)
 
         let clock = ContinuousClock()
         let loadStart = clock.now
 
         try await engine.load()
+        try requireActiveOperation(operationID)
 
         onEvent?(
             .modelLoaded(
@@ -234,25 +241,16 @@ final class ReadAloudPipeline {
             )
         )
 
-        try Task.checkCancellation()
         try playback.prepare()
 
         for (offset, chunk) in chunks.enumerated() {
-            try Task.checkCancellation()
+            try requireActiveOperation(operationID)
 
             await playback.waitUntilQueueDepthBelow(
                 maxQueuedBuffers
             )
 
-            try Task.checkCancellation()
-
-            let beforeSynthesis = playback.snapshot
-            onEvent?(
-                .queueChanged(
-                    queuedBuffers: beforeSynthesis.queuedBuffers,
-                    queuedDurationSeconds: beforeSynthesis.queuedDurationSeconds
-                )
-            )
+            try requireActiveOperation(operationID)
 
             let chunkNumber = offset + 1
 
@@ -278,13 +276,12 @@ final class ReadAloudPipeline {
                 maxChunkSeconds: Double(chunk.targetBucketSeconds)
             )
 
-            try Task.checkCancellation()
+            try requireActiveOperation(operationID)
 
             let underrun = offset > 0 && playback.snapshot.queuedBuffers == 0
 
             try playback.enqueue(result.audio)
 
-            let afterEnqueue = playback.snapshot
             let firstAudioLatency = offset == 0
                 ? Self.seconds(readStart.duration(to: clock.now))
                 : nil
@@ -297,8 +294,6 @@ final class ReadAloudPipeline {
                     synthesisSeconds: result.elapsedSeconds,
                     audioDurationSeconds: result.durationSeconds,
                     realTimeFactor: result.realTimeFactor,
-                    queuedBuffers: afterEnqueue.queuedBuffers,
-                    queuedDurationSeconds: afterEnqueue.queuedDurationSeconds,
                     firstAudioLatencySeconds: firstAudioLatency,
                     underrun: underrun
                 )
@@ -311,15 +306,35 @@ final class ReadAloudPipeline {
 
         setState(.playing)
         await playback.waitUntilDrained()
+        try requireActiveOperation(operationID)
+    }
+
+    private func resetActiveOperation() {
+        activeOperationID = nil
+
+        readingTask?.cancel()
+        readingTask = nil
+
+        playback.stop()
+    }
+
+    private func finishCancellation(_ operationID: UUID) {
+        guard activeOperationID == operationID else {
+            return
+        }
+
+        playback.stop()
+        readingTask = nil
+        activeOperationID = nil
+        setState(.idle)
+    }
+
+    private func requireActiveOperation(_ operationID: UUID) throws {
         try Task.checkCancellation()
 
-        let drained = playback.snapshot
-        onEvent?(
-            .queueChanged(
-                queuedBuffers: drained.queuedBuffers,
-                queuedDurationSeconds: drained.queuedDurationSeconds
-            )
-        )
+        guard activeOperationID == operationID else {
+            throw PipelineError.cancelled
+        }
     }
 
     private func setState(_ newState: State) {

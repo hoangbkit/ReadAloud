@@ -297,6 +297,27 @@ The app is a complete standalone prototype: launch it, type or select text, choo
 
 ---
 
+## Phase 6 — Consolidation
+
+Consolidate the completed prototype so the phases behave as one coherent app rather than a stack of isolated additions.
+
+### Requirements
+
+- preserve upstream Kokoro manifest provenance when generating the ReadAloud subset;
+- use the schema-valid `custom` runtime bundle profile;
+- prevent cancelled or superseded async operations from publishing stale state;
+- publish playback queue changes directly as buffers are enqueued and drained;
+- keep scheduled bucket configuration shared with the bundled Kokoro resources;
+- remove duplicated queue-metric plumbing from synthesis events;
+- provide one bootstrap command for the pinned SDK and verified model assets;
+- keep the pass implementation-only with no CI or runtime validation work.
+
+### Done when
+
+The asset, engine, streaming, metrics, and UI layers have clear ownership boundaries and no known cross-phase inconsistencies remain in static review.
+
+---
+
 ## Suggested repository shape
 
 ```text
