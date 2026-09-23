@@ -20,7 +20,7 @@ struct MetricsView: View {
                 metric("Audio", seconds(metrics.latestAudioDurationSeconds))
                 metric("RTF", ratio(metrics.latestRealTimeFactor))
                 metric(
-                    "Bucket",
+                    "Scheduled bucket",
                     metrics.latestBucketSeconds.map { "\($0)s" } ?? "—"
                 )
                 metric(
