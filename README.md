@@ -29,8 +29,10 @@ bash scripts/bootstrap.sh
 ```
 
 The script pins upstream commit
-`0594fcca424fa4228f4627ee399fbfd3e066eac6` and checks out only the upstream
+`523abafac0e3a82a443b0c2b4543396d7229a914` and checks out only the upstream
 `swift/` and `swift-tts/` package trees under `Vendor/kokoro-coreml/`.
+That commit is the SDK revision declared by the pinned full runtime manifest,
+so source and model/runtime metadata stay on the same published contract.
 The upstream `swift-tts` package owns Misaki phonemization and pins its own
 MisakiSwift dependency.
 
@@ -92,7 +94,8 @@ Kokoro/
 ```
 
 A pre-build validation script fails with a direct message if the downloaded
-resource set is incomplete. `KokoroResources` provides app-side URLs for the
+resource set is incomplete or declares an SDK commit different from the vendored
+source pin. `KokoroResources` provides app-side URLs for the
 manifest, model packages, voices, vocab, and hn-NSF weights.
 
 The source `.mlpackage` directories are bundled intact. The upstream SDK
@@ -131,7 +134,7 @@ KokoroEngine
   ↓
 SpeechPlaybackQueue
   ↓
-AVAudioEngine / AVAudioPlayerNode
+AVAudioEngine / AVAudioPlayerNode (connected at Kokoro's PCM format)
 ```
 
 The scheduler keeps the first chunk intentionally short with a 3-second target,
@@ -194,9 +197,8 @@ For a physical iPhone, generate the project and build the `ReadAloud` scheme wit
 
 ## Current scope
 
-Phases 0-5 plus the consolidation pass are implemented: XcodeGen scaffold,
-reproducible Kokoro assets, app-bundle resource wiring, the local Kokoro Core ML
-engine, continuous read-ahead playback, and the diagnostic reader UI with live
-metrics. The consolidation pass also hardens async operation ownership,
-manifest provenance, live queue reporting, and setup flow. See `PLAN.md` for
-the implementation breakdown.
+Phases 0-5, consolidation, and the static correctness pass are implemented.
+The correctness pass aligns the vendored SDK with the pinned runtime manifest,
+enforces that relationship during asset/build validation, and connects
+AVAudioPlayerNode using Kokoro's actual PCM format. See `PLAN.md` for the
+implementation breakdown.
