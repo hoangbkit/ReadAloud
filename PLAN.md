@@ -318,6 +318,25 @@ The asset, engine, streaming, metrics, and UI layers have clear ownership bounda
 
 ---
 
+## Phase 7 — Correctness
+
+Review the completed prototype against the exact pinned upstream SDK and runtime metadata, fixing correctness issues without expanding product scope.
+
+### Requirements
+
+- keep the vendored Kokoro Swift SDK commit identical to the commit declared by the pinned runtime manifest;
+- fail asset/build validation when SDK/runtime revisions diverge;
+- keep immutable upstream pins in one shared script source;
+- match AVAudioEngine player-node connection format to Kokoro's generated PCM buffer;
+- review Swift API calls, cancellation, queue semantics, XcodeGen package/resource wiring, and manifest structure statically;
+- do not add CI or perform app/device runtime validation in this phase.
+
+### Done when
+
+The repository has no known static API, manifest-contract, playback-format, or cross-phase correctness mismatch after review.
+
+---
+
 ## Suggested repository shape
 
 ```text
