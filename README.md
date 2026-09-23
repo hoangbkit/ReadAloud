@@ -154,7 +154,7 @@ The reader screen now drives the complete local pipeline. It includes:
 - a compact rolling event log.
 
 The live metrics panel reports model load time, first-audio latency, latest
-chunk synthesis time, generated audio duration, RTF, selected model bucket,
+chunk synthesis time, generated audio duration, RTF, scheduled bucket,
 chunk progress, queued audio depth/duration, underrun count, warm-up time, and
 the current iOS thermal state.
 
