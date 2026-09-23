@@ -12,11 +12,14 @@ final class SpeechPlaybackQueue {
 
     enum PlaybackError: LocalizedError {
         case invalidBuffer
+        case inconsistentFormat
 
         var errorDescription: String? {
             switch self {
             case .invalidBuffer:
                 return "Kokoro produced an invalid PCM buffer."
+            case .inconsistentFormat:
+                return "Kokoro produced PCM with an unexpected playback format."
             }
         }
     }
@@ -34,16 +37,13 @@ final class SpeechPlaybackQueue {
     private var drainWaiters: [CheckedContinuation<Void, Never>] = []
     private var generation = 0
     private var queuedDurationSeconds = 0.0
+    private var connectedSampleRate: Double?
+    private var connectedChannelCount: AVAudioChannelCount?
 
     var onSnapshotChange: ((Snapshot) -> Void)?
 
     init() {
         audioEngine.attach(playerNode)
-        audioEngine.connect(
-            playerNode,
-            to: audioEngine.mainMixerNode,
-            format: nil
-        )
     }
 
     var snapshot: Snapshot {
@@ -62,13 +62,6 @@ final class SpeechPlaybackQueue {
             options: []
         )
         try session.setActive(true)
-
-        guard !audioEngine.isRunning else {
-            return
-        }
-
-        audioEngine.prepare()
-        try audioEngine.start()
     }
 
     func enqueue(_ audio: KokoroAudio) throws {
@@ -77,6 +70,8 @@ final class SpeechPlaybackQueue {
         }
 
         let buffer = try audio.makePCMBuffer()
+        try ensureEngineReady(for: buffer.format)
+
         let itemID = UUID()
         let itemGeneration = generation
 
@@ -147,6 +142,33 @@ final class SpeechPlaybackQueue {
         )
 
         notifySnapshotChange()
+    }
+
+    private func ensureEngineReady(for format: AVAudioFormat) throws {
+        if let connectedSampleRate,
+           let connectedChannelCount
+        {
+            guard connectedSampleRate == format.sampleRate,
+                  connectedChannelCount == format.channelCount
+            else {
+                throw PlaybackError.inconsistentFormat
+            }
+        } else {
+            audioEngine.connect(
+                playerNode,
+                to: audioEngine.mainMixerNode,
+                format: format
+            )
+            connectedSampleRate = format.sampleRate
+            connectedChannelCount = format.channelCount
+        }
+
+        guard !audioEngine.isRunning else {
+            return
+        }
+
+        audioEngine.prepare()
+        try audioEngine.start()
     }
 
     private func didFinish(
