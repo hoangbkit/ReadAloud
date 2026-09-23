@@ -22,6 +22,12 @@ Fetch the pinned SDK source before generating the Xcode project:
 bash scripts/download-kokoro-sdk.sh
 ```
 
+Or prepare both the SDK and verified Kokoro assets in one step:
+
+```bash
+bash scripts/bootstrap.sh
+```
+
 The script pins upstream commit
 `0594fcca424fa4228f4627ee399fbfd3e066eac6` and checks out only the upstream
 `swift/` and `swift-tts/` package trees under `Vendor/kokoro-coreml/`.
@@ -58,10 +64,12 @@ The prototype selects all five Kokoro speech buckets (3, 7, 10, 15, and 30
 seconds) and three English voices: `af_heart`, `af_bella`, and
 `am_michael`.
 
-After verification, the downloader also writes a
+After verification, the downloader also writes a schema-valid custom
 `Resources/Kokoro/KokoroRuntimeManifest.json` containing only the exact
-models and voices bundled by ReadAloud. Downloaded assets and the generated
-runtime manifest remain ignored by Git.
+models and voices bundled by ReadAloud. The custom manifest preserves the
+upstream provenance fields unchanged and records ReadAloud's verified source
+manifest digest separately. Downloaded assets and the generated runtime
+manifest remain ignored by Git.
 
 ## App resource bundling
 
@@ -134,7 +142,9 @@ once.
 
 `ReadAloudPipeline` keeps up to two scheduled PCM buffers. It synthesizes the
 next chunk while the current buffer is playing, which provides one-buffer
-read-ahead without letting memory usage grow with document length.
+read-ahead without letting memory usage grow with document length. Playback
+queue changes are emitted directly by `SpeechPlaybackQueue`, so live metrics
+continue to update as buffers drain rather than only when synthesis completes.
 
 Calling `stop()` cancels the active synthesis task and immediately flushes
 scheduled playback. The loaded Kokoro engine stays alive between reads so
@@ -184,7 +194,9 @@ For a physical iPhone, generate the project and build the `ReadAloud` scheme wit
 
 ## Current scope
 
-Phases 0-5 are implemented: XcodeGen scaffold, reproducible Kokoro assets,
-app-bundle resource wiring, the local Kokoro Core ML engine, continuous
-read-ahead playback, and the diagnostic reader UI with live metrics. See
-`PLAN.md` for the implementation breakdown.
+Phases 0-5 plus the consolidation pass are implemented: XcodeGen scaffold,
+reproducible Kokoro assets, app-bundle resource wiring, the local Kokoro Core ML
+engine, continuous read-ahead playback, and the diagnostic reader UI with live
+metrics. The consolidation pass also hardens async operation ownership,
+manifest provenance, live queue reporting, and setup flow. See `PLAN.md` for
+the implementation breakdown.
