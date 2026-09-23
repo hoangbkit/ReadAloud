@@ -254,12 +254,12 @@ mkdir -p "${ASSET_ROOT}"
 
 STAGE_ROOT="${TMP_DIR}/staged"
 mkdir -p "${STAGE_ROOT}"
+TAB="$(printf '\\t')"
 
 verified_count=0
 downloaded_count=0
 
-while IFS=
-\t' read -r expected_sha expected_bytes local_path remote_path; do
+while IFS="${TAB}" read -r expected_sha expected_bytes local_path remote_path; do
   [[ -n "${local_path}" ]] || continue
 
   destination="${ASSET_ROOT}/${local_path}"
@@ -312,8 +312,7 @@ elif [[ "${MODE}" == "verify" ]]; then
 fi
 
 if [[ "${MODE}" == "download" ]]; then
-  while IFS=
-\t' read -r _ _ local_path _; do
+  while IFS="${TAB}" read -r _ _ local_path _; do
     [[ -n "${local_path}" ]] || continue
 
     staged_file="${STAGE_ROOT}/${local_path}"
