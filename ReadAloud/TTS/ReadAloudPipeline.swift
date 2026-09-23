@@ -307,6 +307,8 @@ final class ReadAloudPipeline {
         setState(.playing)
         await playback.waitUntilDrained()
         try requireActiveOperation(operationID)
+
+        playback.stop()
     }
 
     private func resetActiveOperation() {
