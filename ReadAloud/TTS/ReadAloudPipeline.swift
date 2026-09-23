@@ -5,10 +5,39 @@ final class ReadAloudPipeline {
     enum State: Equatable, Sendable {
         case idle
         case loading
+        case warmingUp
         case synthesizing(current: Int, total: Int)
         case playing
         case finished
         case failed(String)
+    }
+
+    enum Event: Sendable {
+        case state(State)
+        case modelLoaded(seconds: Double)
+        case chunkStarted(
+            index: Int,
+            total: Int,
+            bucketSeconds: Int
+        )
+        case chunkReady(
+            index: Int,
+            total: Int,
+            bucketSeconds: Int,
+            synthesisSeconds: Double,
+            audioDurationSeconds: Double,
+            realTimeFactor: Double,
+            queuedBuffers: Int,
+            queuedDurationSeconds: Double,
+            firstAudioLatencySeconds: Double?,
+            underrun: Bool
+        )
+        case queueChanged(
+            queuedBuffers: Int,
+            queuedDurationSeconds: Double
+        )
+        case warmUpFinished(seconds: Double)
+        case stopped
     }
 
     enum PipelineError: LocalizedError {
@@ -34,6 +63,7 @@ final class ReadAloudPipeline {
     private var sessionID: UUID?
 
     private(set) var state: State = .idle
+    var onEvent: ((Event) -> Void)?
 
     init() {
         self.engine = KokoroEngine()
@@ -58,8 +88,10 @@ final class ReadAloudPipeline {
         }
 
         let id = UUID()
+        let readStart = ContinuousClock().now
+
         sessionID = id
-        state = .loading
+        setState(.loading)
 
         let task = Task { @MainActor [weak self] in
             guard let self else {
@@ -69,7 +101,8 @@ final class ReadAloudPipeline {
             try await self.run(
                 chunks: chunks,
                 voice: voice,
-                speed: speed
+                speed: speed,
+                readStart: readStart
             )
         }
 
@@ -90,13 +123,13 @@ final class ReadAloudPipeline {
 
             readingTask = nil
             sessionID = nil
-            state = .finished
+            setState(.finished)
         } catch is CancellationError {
             if sessionID == id {
                 playback.stop()
                 readingTask = nil
                 sessionID = nil
-                state = .idle
+                setState(.idle)
             }
 
             throw PipelineError.cancelled
@@ -105,7 +138,7 @@ final class ReadAloudPipeline {
                 playback.stop()
                 readingTask = nil
                 sessionID = nil
-                state = .idle
+                setState(.idle)
             }
 
             throw PipelineError.cancelled
@@ -114,9 +147,50 @@ final class ReadAloudPipeline {
                 playback.stop()
                 readingTask = nil
                 sessionID = nil
-                state = .failed(Self.message(for: error))
+                setState(.failed(Self.message(for: error)))
             }
 
+            throw error
+        }
+    }
+
+    func warmUp(
+        voice: KokoroEngine.Voice = .heart,
+        speed: Float = 1.0
+    ) async throws -> Double {
+        stop()
+        setState(.loading)
+
+        let clock = ContinuousClock()
+        let loadStart = clock.now
+
+        do {
+            try await engine.load()
+
+            onEvent?(
+                .modelLoaded(
+                    seconds: Self.seconds(loadStart.duration(to: clock.now))
+                )
+            )
+
+            setState(.warmingUp)
+
+            let result = try await engine.warmUp(
+                voice: voice,
+                speed: speed
+            )
+
+            onEvent?(.warmUpFinished(seconds: result.elapsedSeconds))
+            setState(.idle)
+            return result.elapsedSeconds
+        } catch is CancellationError {
+            setState(.idle)
+            throw PipelineError.cancelled
+        } catch KokoroEngine.EngineError.cancelled {
+            setState(.idle)
+            throw PipelineError.cancelled
+        } catch {
+            setState(.failed(Self.message(for: error)))
             throw error
         }
     }
@@ -128,7 +202,8 @@ final class ReadAloudPipeline {
         readingTask = nil
 
         playback.stop()
-        state = .idle
+        setState(.idle)
+        onEvent?(.stopped)
     }
 
     func unload() async {
@@ -143,13 +218,23 @@ final class ReadAloudPipeline {
     private func run(
         chunks: [SpeechChunk],
         voice: KokoroEngine.Voice,
-        speed: Float
+        speed: Float,
+        readStart: ContinuousClock.Instant
     ) async throws {
         try Task.checkCancellation()
 
-        try await engine.load()
-        try Task.checkCancellation()
+        let clock = ContinuousClock()
+        let loadStart = clock.now
 
+        try await engine.load()
+
+        onEvent?(
+            .modelLoaded(
+                seconds: Self.seconds(loadStart.duration(to: clock.now))
+            )
+        )
+
+        try Task.checkCancellation()
         try playback.prepare()
 
         for (offset, chunk) in chunks.enumerated() {
@@ -161,9 +246,29 @@ final class ReadAloudPipeline {
 
             try Task.checkCancellation()
 
-            state = .synthesizing(
-                current: offset + 1,
-                total: chunks.count
+            let beforeSynthesis = playback.snapshot
+            onEvent?(
+                .queueChanged(
+                    queuedBuffers: beforeSynthesis.queuedBuffers,
+                    queuedDurationSeconds: beforeSynthesis.queuedDurationSeconds
+                )
+            )
+
+            let chunkNumber = offset + 1
+
+            setState(
+                .synthesizing(
+                    current: chunkNumber,
+                    total: chunks.count
+                )
+            )
+
+            onEvent?(
+                .chunkStarted(
+                    index: chunkNumber,
+                    total: chunks.count,
+                    bucketSeconds: chunk.targetBucketSeconds
+                )
             )
 
             let result = try await engine.synthesize(
@@ -175,16 +280,51 @@ final class ReadAloudPipeline {
 
             try Task.checkCancellation()
 
+            let underrun = offset > 0 && playback.snapshot.queuedBuffers == 0
+
             try playback.enqueue(result.audio)
 
+            let afterEnqueue = playback.snapshot
+            let firstAudioLatency = offset == 0
+                ? Self.seconds(readStart.duration(to: clock.now))
+                : nil
+
+            onEvent?(
+                .chunkReady(
+                    index: chunkNumber,
+                    total: chunks.count,
+                    bucketSeconds: chunk.targetBucketSeconds,
+                    synthesisSeconds: result.elapsedSeconds,
+                    audioDurationSeconds: result.durationSeconds,
+                    realTimeFactor: result.realTimeFactor,
+                    queuedBuffers: afterEnqueue.queuedBuffers,
+                    queuedDurationSeconds: afterEnqueue.queuedDurationSeconds,
+                    firstAudioLatencySeconds: firstAudioLatency,
+                    underrun: underrun
+                )
+            )
+
             if offset == 0 {
-                state = .playing
+                setState(.playing)
             }
         }
 
-        state = .playing
+        setState(.playing)
         await playback.waitUntilDrained()
         try Task.checkCancellation()
+
+        let drained = playback.snapshot
+        onEvent?(
+            .queueChanged(
+                queuedBuffers: drained.queuedBuffers,
+                queuedDurationSeconds: drained.queuedDurationSeconds
+            )
+        )
+    }
+
+    private func setState(_ newState: State) {
+        state = newState
+        onEvent?(.state(newState))
     }
 
     private static func message(for error: Error) -> String {
@@ -194,5 +334,11 @@ final class ReadAloudPipeline {
         }
 
         return String(describing: error)
+    }
+
+    private static func seconds(_ duration: Duration) -> Double {
+        let components = duration.components
+        return Double(components.seconds)
+            + Double(components.attoseconds) / 1_000_000_000_000_000_000
     }
 }

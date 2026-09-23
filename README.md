@@ -141,8 +141,22 @@ scheduled playback. The loaded Kokoro engine stays alive between reads so
 already-loaded/compiled model state can be reused. `unload()` explicitly drops
 the engine when needed.
 
-The existing reader screen is intentionally not wired to this pipeline yet.
-Phase 5 owns the prototype controls and live metrics UI.
+## Reader prototype UI
+
+The reader screen now drives the complete local pipeline. It includes:
+
+- editable text input;
+- bundled voice selection;
+- 0.8×, 1.0×, and 1.2× speed choices;
+- Read, Stop, and Warm Up controls;
+- three built-in repeatable sample passages;
+- live pipeline status;
+- a compact rolling event log.
+
+The live metrics panel reports model load time, first-audio latency, latest
+chunk synthesis time, generated audio duration, RTF, scheduled bucket,
+chunk progress, queued audio depth/duration, underrun count, warm-up time, and
+the current iOS thermal state.
 
 ## Generate the project
 
@@ -170,7 +184,7 @@ For a physical iPhone, generate the project and build the `ReadAloud` scheme wit
 
 ## Current scope
 
-Phases 0-4 now provide the SwiftUI/XcodeGen scaffold, reproducible Kokoro
-assets, app-bundle resource wiring, the local Kokoro Core ML engine, and the
-continuous read-ahead playback pipeline. Phase 5 adds the prototype reader
-controls and live metrics UI. See `PLAN.md`.
+Phases 0-5 are implemented: XcodeGen scaffold, reproducible Kokoro assets,
+app-bundle resource wiring, the local Kokoro Core ML engine, continuous
+read-ahead playback, and the diagnostic reader UI with live metrics. See
+`PLAN.md` for the implementation breakdown.
