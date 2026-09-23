@@ -8,12 +8,13 @@ ASSET_ROOT="${SRCROOT}/Resources/Kokoro"
 MANIFEST="${ASSET_ROOT}/KokoroRuntimeManifest.json"
 SDK_ROOT="${SRCROOT}/Vendor/kokoro-coreml"
 
-if [[ ! -d "${SDK_ROOT}/.git" ]]; then
+SDK_HEAD="${SDK_ROOT}/.git/HEAD"
+if [[ ! -f "${SDK_HEAD}" ]]; then
   echo "error: Kokoro SDK checkout is missing. Run: bash scripts/download-kokoro-sdk.sh" >&2
   exit 1
 fi
 
-ACTUAL_SDK_COMMIT="$(git -C "${SDK_ROOT}" rev-parse HEAD)"
+IFS= read -r ACTUAL_SDK_COMMIT < "${SDK_HEAD}"
 if [[ "${ACTUAL_SDK_COMMIT}" != "${KOKORO_SDK_COMMIT}" ]]; then
   echo "error: Kokoro SDK checkout does not match the pinned commit" >&2
   echo "expected: ${KOKORO_SDK_COMMIT}" >&2
