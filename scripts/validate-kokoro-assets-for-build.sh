@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/kokoro-pins.sh"
+
 ASSET_ROOT="${SRCROOT}/Resources/Kokoro"
 MANIFEST="${ASSET_ROOT}/KokoroRuntimeManifest.json"
 
@@ -9,12 +12,12 @@ if [[ ! -f "${MANIFEST}" ]]; then
   exit 1
 fi
 
-python3 - "${ASSET_ROOT}" "${MANIFEST}" <<'PY'
+python3 - "${ASSET_ROOT}" "${MANIFEST}" "${KOKORO_SDK_COMMIT}" <<'PY'
 import json
 import os
 import sys
 
-asset_root, manifest_path = sys.argv[1:3]
+asset_root, manifest_path, expected_sdk_commit = sys.argv[1:4]
 
 with open(manifest_path, "r", encoding="utf-8") as handle:
     manifest = json.load(handle)
@@ -28,6 +31,8 @@ expected_voices = [
 
 if manifest.get("bundle_profile") != "custom":
     raise SystemExit("error: unexpected Kokoro runtime manifest profile")
+if manifest.get("sdk_commit") != expected_sdk_commit:
+    raise SystemExit("error: Kokoro runtime manifest SDK commit does not match vendored SDK")
 if manifest.get("hf_provenance_verified") is not True:
     raise SystemExit("error: Kokoro runtime manifest provenance is not verified")
 if len(manifest.get("readaloud_source_manifest_sha256", "")) != 64:
