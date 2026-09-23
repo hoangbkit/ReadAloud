@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 struct ReaderView: View {
@@ -96,8 +97,8 @@ struct ReaderView: View {
                 .font(.subheadline)
                 .foregroundStyle(
                     viewModel.statusText.hasPrefix("Error:")
-                        ? .red
-                        : .secondary
+                        ? Color.red
+                        : Color.secondary
                 )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
