@@ -10,10 +10,28 @@ Minimal iOS prototype for local Kokoro Core ML text-to-speech.
 - Project generation: XcodeGen
 - Generated Xcode project is intentionally not committed.
 
-## Generate the project
+## Kokoro SDK
+
+ReadAloud uses the upstream `KokoroTTS` Swift SDK from
+`mattmireles/kokoro-coreml`. The source checkout is intentionally not
+committed into this repository.
+
+Fetch the pinned SDK source before generating the Xcode project:
 
 ```bash
-xcodegen generate
+bash scripts/download-kokoro-sdk.sh
+```
+
+The script pins upstream commit
+`0594fcca424fa4228f4627ee399fbfd3e066eac6` and checks out only the upstream
+`swift/` and `swift-tts/` package trees under `Vendor/kokoro-coreml/`.
+The upstream `swift-tts` package owns Misaki phonemization and pins its own
+MisakiSwift dependency.
+
+XcodeGen consumes the local package at:
+
+```text
+Vendor/kokoro-coreml/swift-tts
 ```
 
 ## Kokoro assets
@@ -69,9 +87,36 @@ A pre-build validation script fails with a direct message if the downloaded
 resource set is incomplete. `KokoroResources` provides app-side URLs for the
 manifest, model packages, voices, vocab, and hn-NSF weights.
 
-The source `.mlpackage` directories are bundled intact. A later runtime phase
-will let the upstream Kokoro SDK compile/cache them in a writable app cache
-instead of writing compiled artifacts into the read-only application bundle.
+The source `.mlpackage` directories are bundled intact. The upstream SDK
+compiles and caches Core ML models in its writable manifest-keyed cache rather
+than attempting to write compiled artifacts into the application bundle.
+
+## Kokoro engine
+
+`KokoroEngine` is the app-owned boundary around the upstream SDK. It exposes:
+
+```text
+load()
+warmUp(text:voice:speed:)
+synthesize(text:voice:speed:maxChunkSeconds:)
+unload()
+```
+
+ReadAloud owns lifecycle, bundled-resource selection, cancellation/error
+mapping, and synthesis timing. The upstream SDK owns raw-text preparation,
+Misaki phonemization, chunk preparation, voice embeddings, staged Core ML
+inference, and 24 kHz mono PCM generation.
+
+The engine currently exposes the three bundled voices and returns synthesis
+duration plus real-time factor with each generated `KokoroAudio`.
+
+## Generate the project
+
+After fetching the SDK and model assets:
+
+```bash
+xcodegen generate
+```
 
 ## Build from the command line
 
@@ -91,6 +136,7 @@ For a physical iPhone, generate the project and build the `ReadAloud` scheme wit
 
 ## Current scope
 
-Phases 0-2 now provide the SwiftUI/XcodeGen scaffold, reproducible Kokoro asset
-download, and app-bundle resource wiring. Kokoro runtime integration, playback,
-and live metrics are added in later phases. See `PLAN.md`.
+Phases 0-3 now provide the SwiftUI/XcodeGen scaffold, reproducible Kokoro
+assets, app-bundle resource wiring, and the local Kokoro Core ML engine.
+Continuous playback and live reader metrics are added in later phases. See
+`PLAN.md`.
