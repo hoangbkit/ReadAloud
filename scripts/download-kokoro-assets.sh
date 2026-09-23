@@ -228,10 +228,7 @@ package_map = {entry["path"]: entry for entry in manifest.get("model_packages", 
 voice_map = {entry["path"]: entry for entry in manifest.get("voices", [])}
 
 subset = dict(manifest)
-subset["hf_revision"] = pinned_revision
-subset["hf_provenance_verified"] = True
-subset["hf_download_manifest_sha256"] = source_manifest_sha
-subset["bundle_profile"] = "readaloud"
+subset["bundle_profile"] = "custom"
 subset["buckets"] = expected_buckets
 subset["duration_token_sizes"] = [128]
 subset["model_packages"] = [package_map[path] for path in required_packages]
@@ -240,6 +237,7 @@ subset["voices"] = [
     for voice in selected_voices
 ]
 subset["readaloud_source_manifest_sha256"] = source_manifest_sha
+subset["readaloud_hosted_revision"] = pinned_revision
 
 with open(output_path, "w", encoding="utf-8") as handle:
     json.dump(subset, handle, indent=2, sort_keys=True)
