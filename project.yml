@@ -38,6 +38,7 @@ targets:
         inputFiles:
           - $(SRCROOT)/Resources/Kokoro
           - $(SRCROOT)/scripts/validate-kokoro-assets-for-build.sh
+          - $(SRCROOT)/scripts/kokoro-pins.sh
         basedOnDependencyAnalysis: false
     dependencies:
       - package: KokoroTTS
