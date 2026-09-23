@@ -1,4 +1,4 @@
-import SwiftUI
+import Foundation\nimport SwiftUI
 
 struct MetricsView: View {
     let metrics: PerformanceMetrics
