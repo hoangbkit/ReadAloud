@@ -98,9 +98,7 @@ final class ReadAloudPipeline {
             }
 
             throw PipelineError.cancelled
-        } catch let error as KokoroEngine.EngineError
-            where error == .cancelled
-        {
+        } catch KokoroEngine.EngineError.cancelled {
             if sessionID == id {
                 playback.stop()
                 readingTask = nil
