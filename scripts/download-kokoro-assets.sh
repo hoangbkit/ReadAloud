@@ -70,9 +70,10 @@ TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/readaloud-kokoro.XXXXXX")"
 trap 'rm -rf "${TMP_DIR}"' EXIT
 
 download_url() {
-  local remote_path="$1"
-  local output_path="$2"
-  local url="${HF_BASE_URL}/resolve/${HF_REVISION}/${remote_path}?download=true"
+  local revision="$1"
+  local remote_path="$2"
+  local output_path="$3"
+  local url="${HF_BASE_URL}/resolve/${revision}/${remote_path}?download=true"
 
   curl \
     --fail \
@@ -111,7 +112,7 @@ verify_file() {
 }
 
 UPSTREAM_MANIFEST="${TMP_DIR}/KokoroRuntimeManifest.json"
-download_url "${UPSTREAM_MANIFEST_PATH}" "${UPSTREAM_MANIFEST}"
+download_url "${HF_REVISION}" "${UPSTREAM_MANIFEST_PATH}" "${UPSTREAM_MANIFEST}"
 
 ACTUAL_MANIFEST_SHA="$(sha256_of "${UPSTREAM_MANIFEST}")"
 if [[ "${ACTUAL_MANIFEST_SHA}" != "${EXPECTED_MANIFEST_SHA}" ]]; then
@@ -121,7 +122,24 @@ if [[ "${ACTUAL_MANIFEST_SHA}" != "${EXPECTED_MANIFEST_SHA}" ]]; then
   exit 1
 fi
 
-echo "Kokoro source: ${HF_REPO}@${HF_REVISION}"
+ARTIFACT_REVISION="$(
+  python3 - "${UPSTREAM_MANIFEST}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    manifest = json.load(handle)
+
+revision = manifest.get("hf_revision")
+if not isinstance(revision, str) or len(revision) != 40:
+    raise SystemExit("upstream runtime manifest has an invalid hf_revision")
+
+print(revision)
+PY
+)"
+
+echo "Kokoro metadata: ${HF_REPO}@${HF_REVISION}"
+echo "Kokoro artifacts: ${HF_REPO}@${ARTIFACT_REVISION}"
 echo "Verified upstream manifest: ${UPSTREAM_MANIFEST_PATH}"
 
 ASSET_LIST="${TMP_DIR}/assets.tsv"
@@ -283,7 +301,7 @@ while IFS="${TAB}" read -r expected_sha expected_bytes local_path remote_path; d
 
   staged_file="${STAGE_ROOT}/${local_path}"
   mkdir -p "$(dirname "${staged_file}")"
-  download_url "${remote_path}" "${staged_file}"
+  download_url "${ARTIFACT_REVISION}" "${remote_path}" "${staged_file}"
 
   if ! verify_file "${staged_file}" "${expected_sha}" "${expected_bytes}"; then
     echo "error: downloaded asset failed verification: ${local_path}" >&2
