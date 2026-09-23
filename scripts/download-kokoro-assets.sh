@@ -200,6 +200,52 @@ for key in ("vocab", "hnsf_weights"):
     )
 PY
 
+SUBSET_MANIFEST="${TMP_DIR}/ReadAloudKokoroRuntimeManifest.json"
+
+python3 - "${UPSTREAM_MANIFEST}" "${SUBSET_MANIFEST}" "${EXPECTED_MANIFEST_SHA}" "${HF_REVISION}" <<'PY'
+import json
+import sys
+
+source_path, output_path, source_manifest_sha, pinned_revision = sys.argv[1:5]
+
+with open(source_path, "r", encoding="utf-8") as handle:
+    manifest = json.load(handle)
+
+expected_buckets = [3, 7, 10, 15, 30]
+selected_voices = ["af_heart", "af_bella", "am_michael"]
+
+required_packages = ["coreml/kokoro_duration_t128.mlpackage"]
+for bucket in expected_buckets:
+    required_packages.extend(
+        [
+            f"coreml/kokoro_f0ntrain_t{bucket * 40}.mlpackage",
+            f"coreml/kokoro_decoder_pre_{bucket}s.mlpackage",
+            f"coreml/kokoro_decoder_har_post_{bucket}s.mlpackage",
+        ]
+    )
+
+package_map = {entry["path"]: entry for entry in manifest.get("model_packages", [])}
+voice_map = {entry["path"]: entry for entry in manifest.get("voices", [])}
+
+subset = dict(manifest)
+subset["hf_revision"] = pinned_revision
+subset["hf_provenance_verified"] = True
+subset["hf_download_manifest_sha256"] = source_manifest_sha
+subset["bundle_profile"] = "readaloud"
+subset["buckets"] = expected_buckets
+subset["duration_token_sizes"] = [128]
+subset["model_packages"] = [package_map[path] for path in required_packages]
+subset["voices"] = [
+    voice_map[f"voices/{voice}.bin"]
+    for voice in selected_voices
+]
+subset["readaloud_source_manifest_sha256"] = source_manifest_sha
+
+with open(output_path, "w", encoding="utf-8") as handle:
+    json.dump(subset, handle, indent=2, sort_keys=True)
+    handle.write("\n")
+PY
+
 mkdir -p "${ASSET_ROOT}"
 
 verified_count=0
@@ -242,6 +288,25 @@ while IFS=$'\t' read -r expected_sha expected_bytes local_path remote_path; do
   downloaded_count=$((downloaded_count + 1))
   verified_count=$((verified_count + 1))
 done < "${ASSET_LIST}"
+
+MANIFEST_DESTINATION="${ASSET_ROOT}/KokoroRuntimeManifest.json"
+GENERATED_MANIFEST_SHA="$(sha256_of "${SUBSET_MANIFEST}")"
+
+if [[ -e "${MANIFEST_DESTINATION}" ]]; then
+  EXISTING_MANIFEST_SHA="$(sha256_of "${MANIFEST_DESTINATION}")"
+  if [[ "${EXISTING_MANIFEST_SHA}" != "${GENERATED_MANIFEST_SHA}" ]]; then
+    echo "error: existing KokoroRuntimeManifest.json does not match the pinned asset set" >&2
+    echo "refusing to replace the mismatched manifest automatically" >&2
+    exit 1
+  fi
+  echo "verified: KokoroRuntimeManifest.json"
+elif [[ "${MODE}" == "verify" ]]; then
+  echo "error: missing asset: KokoroRuntimeManifest.json" >&2
+  exit 1
+else
+  mv "${SUBSET_MANIFEST}" "${MANIFEST_DESTINATION}"
+  echo "generated + verified: KokoroRuntimeManifest.json"
+fi
 
 echo
 echo "Kokoro assets verified: ${verified_count}"
