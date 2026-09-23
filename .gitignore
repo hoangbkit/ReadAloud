@@ -15,3 +15,7 @@ build/
 .build/
 .swiftpm/
 Package.resolved
+
+# Downloaded Kokoro assets
+Resources/Kokoro/*
+!Resources/Kokoro/.gitkeep
