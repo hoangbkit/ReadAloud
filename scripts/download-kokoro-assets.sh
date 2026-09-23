@@ -205,7 +205,7 @@ while IFS=$'\t' read -r expected_sha expected_bytes relative_path; do
   fi
 
   temp_file="${TMP_DIR}/download-${downloaded_count}"
-  download_url "${relative_path}" "${temp_file}"
+  download_url "${remote_path}" "${temp_file}"
 
   if ! verify_file "${temp_file}" "${expected_sha}" "${expected_bytes}"; then
     echo "error: downloaded asset failed verification: ${relative_path}" >&2
