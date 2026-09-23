@@ -1,0 +1,29 @@
+name: ReadAloud
+
+options:
+  createIntermediateGroups: true
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: J458WW3452
+    SWIFT_VERSION: 6.0
+
+targets:
+  ReadAloud:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: ReadAloud
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hoangbkit.readaloud
+        PRODUCT_NAME: ReadAloud
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+    scheme:
+      gatherCoverageData: false
