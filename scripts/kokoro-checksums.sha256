@@ -1,0 +1,4 @@
+# Pinned upstream Kokoro full-profile runtime manifest.
+# Hugging Face repo: mattmireles/kokoro-coreml
+# Immutable metadata revision: 35edee0d4f77a6f2cfbb576606a3929b1f188397
+5981361ac7faaf0d9d7475bb700e315aa6322424e12e133f132ac8eaa1e5ae9a  sdk/full/KokoroRuntimeManifest.json
