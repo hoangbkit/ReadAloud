@@ -24,6 +24,17 @@ targets:
     deploymentTarget: "18.0"
     sources:
       - path: ReadAloud
+      - path: Resources/Kokoro
+        type: folder
+        buildPhase: resources
+    preBuildScripts:
+      - name: Validate Kokoro Assets
+        script: |
+          bash "$SRCROOT/scripts/validate-kokoro-assets-for-build.sh"
+        inputFiles:
+          - $(SRCROOT)/Resources/Kokoro
+          - $(SRCROOT)/scripts/validate-kokoro-assets-for-build.sh
+        basedOnDependencyAnalysis: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.hoangbkit.readaloud
