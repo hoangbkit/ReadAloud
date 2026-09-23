@@ -35,14 +35,10 @@ final class ReadAloudPipeline {
 
     private(set) var state: State = .idle
 
-    init(
-        engine: KokoroEngine = KokoroEngine(),
-        playback: SpeechPlaybackQueue = SpeechPlaybackQueue(),
-        scheduler: SpeechChunkScheduler = SpeechChunkScheduler()
-    ) {
-        self.engine = engine
-        self.playback = playback
-        self.scheduler = scheduler
+    init() {
+        self.engine = KokoroEngine()
+        self.playback = SpeechPlaybackQueue()
+        self.scheduler = SpeechChunkScheduler()
     }
 
     func read(
@@ -80,7 +76,13 @@ final class ReadAloudPipeline {
         readingTask = task
 
         do {
-            try await task.value
+            try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: {
+                Task { @MainActor [weak self] in
+                    self?.stop()
+                }
+            }
 
             guard sessionID == id else {
                 throw PipelineError.cancelled
