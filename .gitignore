@@ -19,3 +19,6 @@ Package.resolved
 # Downloaded Kokoro assets
 Resources/Kokoro/*
 !Resources/Kokoro/.gitkeep
+
+# Pinned upstream Kokoro SDK checkout
+Vendor/kokoro-coreml/
