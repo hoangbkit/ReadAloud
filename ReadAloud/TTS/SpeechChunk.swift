@@ -8,9 +8,15 @@ struct SpeechChunk: Identifiable, Equatable, Sendable {
 }
 
 struct SpeechChunkScheduler: Sendable {
-    private let firstBucketSeconds = 3
-    private let steadyBucketSeconds = 7
-    private let availableBuckets = [3, 7, 10, 15, 30]
+    private let availableBuckets = KokoroResources.buckets
+
+    private var firstBucketSeconds: Int {
+        availableBuckets.first ?? 3
+    }
+
+    private var steadyBucketSeconds: Int {
+        availableBuckets.dropFirst().first ?? firstBucketSeconds
+    }
 
     func chunks(
         for text: String,
