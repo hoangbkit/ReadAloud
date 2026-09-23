@@ -35,6 +35,20 @@ voice_paths = [entry.get("path") for entry in manifest.get("voices", [])]
 if voice_paths != expected_voices:
     raise SystemExit("error: Kokoro runtime manifest has unexpected voice set")
 
+expected_packages = ["coreml/kokoro_duration_t128.mlpackage"]
+for bucket in expected_buckets:
+    expected_packages.extend(
+        [
+            f"coreml/kokoro_f0ntrain_t{bucket * 40}.mlpackage",
+            f"coreml/kokoro_decoder_pre_{bucket}s.mlpackage",
+            f"coreml/kokoro_decoder_har_post_{bucket}s.mlpackage",
+        ]
+    )
+
+package_paths = [entry.get("path") for entry in manifest.get("model_packages", [])]
+if package_paths != expected_packages:
+    raise SystemExit("error: Kokoro runtime manifest has unexpected model package set")
+
 def require_file(relative_path: str, expected_bytes: int) -> None:
     full_path = os.path.join(asset_root, relative_path)
     if not os.path.isfile(full_path):
