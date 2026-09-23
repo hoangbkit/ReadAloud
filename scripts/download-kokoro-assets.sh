@@ -6,9 +6,11 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ASSET_ROOT="${REPO_ROOT}/Resources/Kokoro"
 CHECKSUM_FILE="${SCRIPT_DIR}/kokoro-checksums.sha256"
 
-HF_REPO="mattmireles/kokoro-coreml"
-HF_REVISION="35edee0d4f77a6f2cfbb576606a3929b1f188397"
-UPSTREAM_MANIFEST_PATH="sdk/full/KokoroRuntimeManifest.json"
+source "${SCRIPT_DIR}/kokoro-pins.sh"
+
+HF_REPO="${KOKORO_HF_REPO}"
+HF_REVISION="${KOKORO_HF_METADATA_REVISION}"
+UPSTREAM_MANIFEST_PATH="${KOKORO_FULL_RUNTIME_MANIFEST_PATH}"
 HF_BASE_URL="https://huggingface.co/${HF_REPO}"
 
 MODE="download"
@@ -124,11 +126,11 @@ echo "Verified upstream manifest: ${UPSTREAM_MANIFEST_PATH}"
 
 ASSET_LIST="${TMP_DIR}/assets.tsv"
 
-python3 - "${UPSTREAM_MANIFEST}" > "${ASSET_LIST}" <<'PY'
+python3 - "${UPSTREAM_MANIFEST}" "${KOKORO_SDK_COMMIT}" > "${ASSET_LIST}" <<'PY'
 import json
 import sys
 
-manifest_path = sys.argv[1]
+manifest_path, expected_sdk_commit = sys.argv[1:3]
 with open(manifest_path, "r", encoding="utf-8") as handle:
     manifest = json.load(handle)
 
@@ -138,6 +140,10 @@ selected_voices = ["af_heart", "af_bella", "am_michael"]
 
 if manifest.get("bundle_profile") != "full":
     raise SystemExit("upstream runtime manifest is not the full profile")
+if manifest.get("sdk_commit") != expected_sdk_commit:
+    raise SystemExit(
+        "upstream runtime manifest SDK commit does not match ReadAloud's pinned SDK"
+    )
 if manifest.get("buckets") != expected_buckets:
     raise SystemExit(f"unexpected Kokoro buckets: {manifest.get('buckets')!r}")
 if manifest.get("duration_token_sizes") != expected_duration_sizes:
