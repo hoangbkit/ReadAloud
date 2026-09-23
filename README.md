@@ -110,6 +110,40 @@ inference, and 24 kHz mono PCM generation.
 The engine currently exposes the three bundled voices and returns synthesis
 duration plus real-time factor with each generated `KokoroAudio`.
 
+## Continuous read-aloud pipeline
+
+Phase 4 adds the streaming reader path:
+
+```text
+text
+  ↓
+SpeechChunkScheduler
+  ↓
+KokoroEngine
+  ↓
+SpeechPlaybackQueue
+  ↓
+AVAudioEngine / AVAudioPlayerNode
+```
+
+The scheduler keeps the first chunk intentionally short with a 3-second target,
+then uses 7 seconds for normal steady-state chunks and moves to 10, 15, or 30
+seconds only when a larger sentence requires it. Long sentences are split on
+word boundaries before synthesis instead of synthesizing the full document at
+once.
+
+`ReadAloudPipeline` keeps up to two scheduled PCM buffers. It synthesizes the
+next chunk while the current buffer is playing, which provides one-buffer
+read-ahead without letting memory usage grow with document length.
+
+Calling `stop()` cancels the active synthesis task and immediately flushes
+scheduled playback. The loaded Kokoro engine stays alive between reads so
+already-loaded/compiled model state can be reused. `unload()` explicitly drops
+the engine when needed.
+
+The existing reader screen is intentionally not wired to this pipeline yet.
+Phase 5 owns the prototype controls and live metrics UI.
+
 ## Generate the project
 
 After fetching the SDK and model assets:
@@ -136,7 +170,7 @@ For a physical iPhone, generate the project and build the `ReadAloud` scheme wit
 
 ## Current scope
 
-Phases 0-3 now provide the SwiftUI/XcodeGen scaffold, reproducible Kokoro
-assets, app-bundle resource wiring, and the local Kokoro Core ML engine.
-Continuous playback and live reader metrics are added in later phases. See
-`PLAN.md`.
+Phases 0-4 now provide the SwiftUI/XcodeGen scaffold, reproducible Kokoro
+assets, app-bundle resource wiring, the local Kokoro Core ML engine, and the
+continuous read-ahead playback pipeline. Phase 5 adds the prototype reader
+controls and live metrics UI. See `PLAN.md`.
