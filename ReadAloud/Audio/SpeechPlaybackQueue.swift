@@ -48,7 +48,7 @@ final class SpeechPlaybackQueue {
         Snapshot(
             queuedBuffers: pendingDurations.count,
             queuedDurationSeconds: queuedDurationSeconds,
-            isPlaying: playerNode.isPlaying
+            isPlaying: playerNode.isPlaying && !pendingDurations.isEmpty
         )
     }
 
