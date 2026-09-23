@@ -52,7 +52,7 @@ final class ReaderViewModel {
         appendEvent("Read requested")
         isBusy = true
 
-        let text = text
+        let textToRead = text
         let voice = selectedVoice
         let speed = selectedSpeed
 
@@ -63,7 +63,7 @@ final class ReaderViewModel {
 
             do {
                 try await pipeline.read(
-                    text: text,
+                    text: textToRead,
                     voice: voice,
                     speed: speed
                 )
@@ -76,6 +76,7 @@ final class ReaderViewModel {
 
             if !Task.isCancelled {
                 isBusy = false
+                actionTask = nil
             }
         }
     }
@@ -120,6 +121,7 @@ final class ReaderViewModel {
 
             if !Task.isCancelled {
                 isBusy = false
+                actionTask = nil
             }
         }
     }
