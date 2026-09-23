@@ -159,7 +159,7 @@ for package_path in required_packages:
 
     for entry in files:
         relative_path = f"{package_path}/{entry['path']}"
-        print(f"{entry['sha256']}\t{entry['bytes']}\t{relative_path}")
+        print(f"{entry['sha256']}\t{entry['bytes']}\t{relative_path}\t{relative_path}")
 
 voice_map = {entry["path"]: entry for entry in manifest.get("voices", [])}
 for voice in selected_voices:
@@ -167,14 +167,15 @@ for voice in selected_voices:
     entry = voice_map.get(path)
     if entry is None:
         raise SystemExit(f"missing voice in upstream manifest: {path}")
-    print(f"{entry['sha256']}\t{entry['bytes']}\t{path}")
+    remote_path = f"kokoro.js/voices/{voice}.bin"
+    print(f"{entry['sha256']}\t{entry['bytes']}\t{path}\t{remote_path}")
 
 runtime_assets = manifest.get("runtime_assets") or {}
 for key in ("vocab", "hnsf_weights"):
     entry = runtime_assets.get(key)
     if not entry:
         raise SystemExit(f"missing runtime asset in upstream manifest: {key}")
-    print(f"{entry['sha256']}\t{entry['bytes']}\t{entry['path']}")
+    print(f"{entry['sha256']}\t{entry['bytes']}\t{entry['path']}\t{entry['path']}")
 PY
 
 mkdir -p "${ASSET_ROOT}"
@@ -182,7 +183,50 @@ mkdir -p "${ASSET_ROOT}"
 verified_count=0
 downloaded_count=0
 
-while IFS=$'\t' read -r expected_sha expected_bytes relative_path; do
+while IFS=
+  [[ -n "${relative_path}" ]] || continue
+
+  destination="${ASSET_ROOT}/${relative_path}"
+
+  if [[ -e "${destination}" ]]; then
+    if verify_file "${destination}" "${expected_sha}" "${expected_bytes}"; then
+      echo "verified: ${relative_path}"
+      verified_count=$((verified_count + 1))
+      continue
+    fi
+
+    echo "error: existing asset does not match pinned checksum: ${relative_path}" >&2
+    echo "refusing to replace the mismatched file automatically" >&2
+    exit 1
+  fi
+
+  if [[ "${MODE}" == "verify" ]]; then
+    echo "error: missing asset: ${relative_path}" >&2
+    exit 1
+  fi
+
+  temp_file="${TMP_DIR}/download-${downloaded_count}"
+  download_url "${remote_path}" "${temp_file}"
+
+  if ! verify_file "${temp_file}" "${expected_sha}" "${expected_bytes}"; then
+    echo "error: downloaded asset failed verification: ${relative_path}" >&2
+    exit 1
+  fi
+
+  mkdir -p "$(dirname "${destination}")"
+  mv "${temp_file}" "${destination}"
+  echo "downloaded + verified: ${relative_path}"
+
+  downloaded_count=$((downloaded_count + 1))
+  verified_count=$((verified_count + 1))
+done < "${ASSET_LIST}"
+
+echo
+echo "Kokoro assets verified: ${verified_count}"
+if [[ "${MODE}" == "download" ]]; then
+  echo "New assets downloaded: ${downloaded_count}"
+fi
+\t' read -r expected_sha expected_bytes relative_path remote_path; do
   [[ -n "${relative_path}" ]] || continue
 
   destination="${ASSET_ROOT}/${relative_path}"
