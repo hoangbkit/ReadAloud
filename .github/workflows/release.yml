@@ -92,10 +92,11 @@ jobs:
           echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           echo "Next release: $next"
 
-      - name: Build unsigned iOS app
+      - name: Archive unsigned iOS app
         shell: bash
         run: |
           IOS_DERIVED="$RUNNER_TEMP/ReadAloud-iOS"
+          IOS_ARCHIVE="$RUNNER_TEMP/ReadAloud.xcarchive"
           SOURCE_PACKAGES="$RUNNER_TEMP/ReadAloud-SourcePackages"
 
           args=(
@@ -106,19 +107,20 @@ jobs:
             -destination "generic/platform=iOS"
             -derivedDataPath "$IOS_DERIVED"
             -clonedSourcePackagesDirPath "$SOURCE_PACKAGES"
+            -archivePath "$IOS_ARCHIVE"
             CODE_SIGNING_ALLOWED=NO
             CODE_SIGNING_REQUIRED=NO
-            build
+            archive
           )
           xcodebuild "${args[@]}"
 
-          IOS_APP="$IOS_DERIVED/Build/Products/Release-iphoneos/ReadAloud.app"
-          test -d "$IOS_APP"
+          test -d "$IOS_ARCHIVE"
+          test -d "$IOS_ARCHIVE/Products/Applications/ReadAloud.app"
 
           mkdir -p artifacts
-          ditto -c -k --sequesterRsrc --keepParent             "$IOS_APP"             "artifacts/ReadAloud-iOS-unsigned-${{ steps.version.outputs.version }}.zip"
+          ditto -c -k --sequesterRsrc --keepParent             "$IOS_ARCHIVE"             "artifacts/ReadAloud-iOS-unsigned-${{ steps.version.outputs.version }}.xcarchive.zip"
 
-          rm -rf "$IOS_DERIVED"
+          rm -rf "$IOS_DERIVED" "$IOS_ARCHIVE"
 
       - name: Build unsigned macOS app
         shell: bash
