@@ -22,3 +22,6 @@ Resources/Kokoro/*
 
 # Pinned upstream Kokoro SDK checkout
 Vendor/kokoro-coreml/
+
+# Resumable Kokoro download cache
+.cache/kokoro-downloads/
