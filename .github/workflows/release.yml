@@ -37,7 +37,7 @@ jobs:
 
       - name: Restore Kokoro model cache
         id: kokoro-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             Resources/Kokoro
@@ -46,6 +46,15 @@ jobs:
 
       - name: Prepare Kokoro models
         run: bash scripts/bootstrap.sh
+
+      - name: Save Kokoro model cache
+        if: steps.kokoro-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            Resources/Kokoro
+            .cache/kokoro-downloads
+          key: kokoro-assets-${{ hashFiles('scripts/kokoro-pins.sh', 'scripts/kokoro-checksums.sha256', 'scripts/download-kokoro-assets.sh') }}
 
       - name: Generate Xcode project
         run: xcodegen generate
