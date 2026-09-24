@@ -7,6 +7,7 @@ Minimal iOS prototype for local Kokoro Core ML text-to-speech.
 - Bundle ID: `com.hoangbkit.readaloud`
 - Development team: `J458WW3452`
 - Minimum iOS: 18.0
+- Minimum macOS: 15.0
 - Project generation: XcodeGen
 - Generated Xcode project is intentionally not committed.
 

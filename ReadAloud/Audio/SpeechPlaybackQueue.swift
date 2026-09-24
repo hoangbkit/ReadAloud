@@ -55,6 +55,7 @@ final class SpeechPlaybackQueue {
     }
 
     func prepare() throws {
+        #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(
             .playback,
@@ -62,6 +63,7 @@ final class SpeechPlaybackQueue {
             options: []
         )
         try session.setActive(true)
+        #endif
     }
 
     func enqueue(_ audio: KokoroAudio) throws {
@@ -136,10 +138,12 @@ final class SpeechPlaybackQueue {
             audioEngine.stop()
         }
 
+        #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(
             false,
             options: .notifyOthersOnDeactivation
         )
+        #endif
 
         notifySnapshotChange()
     }

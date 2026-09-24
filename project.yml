@@ -56,11 +56,55 @@ targets:
         TARGETED_DEVICE_FAMILY: 1
         SUPPORTS_MACCATALYST: NO
 
+  ReadAloudMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: ReadAloud
+      - path: Resources/Kokoro
+        type: folder
+        buildPhase: resources
+    preBuildScripts:
+      - name: Validate Kokoro Assets
+        script: |
+          bash "$SRCROOT/scripts/validate-kokoro-assets-for-build.sh"
+        inputFiles:
+          - $(SRCROOT)/Resources/Kokoro
+          - $(SRCROOT)/scripts/validate-kokoro-assets-for-build.sh
+          - $(SRCROOT)/scripts/kokoro-pins.sh
+        basedOnDependencyAnalysis: false
+    dependencies:
+      - package: KokoroCoreML
+        product: KokoroTTS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hoangbkit.readaloud
+        PRODUCT_NAME: ReadAloud
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: ReadAloud
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        CODE_SIGN_STYLE: Automatic
+
 schemes:
   ReadAloud:
     build:
       targets:
         ReadAloud: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+  ReadAloudMac:
+    build:
+      targets:
+        ReadAloudMac: all
     run:
       config: Debug
     profile:
