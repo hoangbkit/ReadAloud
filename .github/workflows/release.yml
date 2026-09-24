@@ -36,7 +36,9 @@ jobs:
         id: kokoro-cache
         uses: actions/cache@v4
         with:
-          path: Resources/Kokoro
+          path: |
+            Resources/Kokoro
+            .cache/kokoro-downloads
           key: kokoro-assets-${{ hashFiles('scripts/kokoro-pins.sh', 'scripts/kokoro-checksums.sha256', 'scripts/download-kokoro-assets.sh') }}
 
       - name: Prepare Kokoro models
@@ -51,16 +53,28 @@ jobs:
         run: |
           git fetch --tags --force
 
-          latest="$(
-            git tag --list               | sed -E 's/^v//'               | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$'               | sort -V               | tail -n 1               || true
-          )"
+          next="$(python3 - <<'PY'
+          import re
+          import subprocess
 
-          if [[ -z "$latest" ]]; then
-            next="1.0.0"
-          else
-            IFS='.' read -r major minor patch <<< "$latest"
-            next="${major}.${minor}.$((patch + 1))"
-          fi
+          versions = []
+          tags = subprocess.check_output(
+              ["git", "tag", "--list"],
+              text=True,
+          ).splitlines()
+
+          for tag in tags:
+              match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", tag.strip())
+              if match:
+                  versions.append(tuple(map(int, match.groups())))
+
+          if not versions:
+              print("1.0.0")
+          else:
+              major, minor, patch = max(versions)
+              print(f"{major}.{minor}.{patch + 1}")
+          PY
+          )"
 
           echo "version=$next" >> "$GITHUB_OUTPUT"
           echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -72,13 +86,25 @@ jobs:
           IOS_DERIVED="$RUNNER_TEMP/ReadAloud-iOS"
           SOURCE_PACKAGES="$RUNNER_TEMP/ReadAloud-SourcePackages"
 
-          xcodebuild             -project ReadAloud.xcodeproj             -scheme ReadAloud             -configuration Release             -sdk iphoneos             -destination 'generic/platform=iOS'             -derivedDataPath "$IOS_DERIVED"             -clonedSourcePackagesDirPath "$SOURCE_PACKAGES"             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             build
+          args=(
+            -project ReadAloud.xcodeproj
+            -scheme ReadAloud
+            -configuration Release
+            -sdk iphoneos
+            -destination "generic/platform=iOS"
+            -derivedDataPath "$IOS_DERIVED"
+            -clonedSourcePackagesDirPath "$SOURCE_PACKAGES"
+            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_REQUIRED=NO
+            build
+          )
+          xcodebuild "${args[@]}"
 
           IOS_APP="$IOS_DERIVED/Build/Products/Release-iphoneos/ReadAloud.app"
           test -d "$IOS_APP"
 
           mkdir -p artifacts
-          ditto             -c -k --sequesterRsrc --keepParent             "$IOS_APP"             "artifacts/ReadAloud-iOS-unsigned-${{ steps.version.outputs.version }}.zip"
+          ditto -c -k --sequesterRsrc --keepParent             "$IOS_APP"             "artifacts/ReadAloud-iOS-unsigned-${{ steps.version.outputs.version }}.zip"
 
           rm -rf "$IOS_DERIVED"
 
@@ -88,12 +114,24 @@ jobs:
           MAC_DERIVED="$RUNNER_TEMP/ReadAloud-macOS"
           SOURCE_PACKAGES="$RUNNER_TEMP/ReadAloud-SourcePackages"
 
-          xcodebuild             -project ReadAloud.xcodeproj             -scheme ReadAloudMac             -configuration Release             -sdk macosx             -destination 'platform=macOS'             -derivedDataPath "$MAC_DERIVED"             -clonedSourcePackagesDirPath "$SOURCE_PACKAGES"             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             build
+          args=(
+            -project ReadAloud.xcodeproj
+            -scheme ReadAloudMac
+            -configuration Release
+            -sdk macosx
+            -destination "platform=macOS"
+            -derivedDataPath "$MAC_DERIVED"
+            -clonedSourcePackagesDirPath "$SOURCE_PACKAGES"
+            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_REQUIRED=NO
+            build
+          )
+          xcodebuild "${args[@]}"
 
           MAC_APP="$MAC_DERIVED/Build/Products/Release/ReadAloud.app"
           test -d "$MAC_APP"
 
-          ditto             -c -k --sequesterRsrc --keepParent             "$MAC_APP"             "artifacts/ReadAloud-macOS-arm64-unsigned-${{ steps.version.outputs.version }}.zip"
+          ditto -c -k --sequesterRsrc --keepParent             "$MAC_APP"             "artifacts/ReadAloud-macOS-arm64-unsigned-${{ steps.version.outputs.version }}.zip"
 
           rm -rf "$MAC_DERIVED"
 
