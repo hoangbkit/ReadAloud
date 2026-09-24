@@ -134,6 +134,8 @@ jobs:
             -destination "platform=macOS"
             -derivedDataPath "$MAC_DERIVED"
             -clonedSourcePackagesDirPath "$SOURCE_PACKAGES"
+            ARCHS=arm64
+            ONLY_ACTIVE_ARCH=YES
             CODE_SIGNING_ALLOWED=NO
             CODE_SIGNING_REQUIRED=NO
             build
