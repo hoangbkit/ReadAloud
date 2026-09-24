@@ -19,7 +19,8 @@ configs:
 
 packages:
   KokoroCoreML:
-    path: ../KokoroCoreML
+    url: https://github.com/hoangbkit/KokoroCoreML.git
+    exactVersion: 1.0.0
 
 targets:
   ReadAloud:
