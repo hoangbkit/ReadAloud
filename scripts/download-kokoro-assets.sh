@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ASSET_ROOT="${REPO_ROOT}/Resources/Kokoro"
 CHECKSUM_FILE="${SCRIPT_DIR}/kokoro-checksums.sha256"
+DOWNLOAD_CACHE_ROOT="${REPO_ROOT}/.cache/kokoro-downloads"
 
 source "${SCRIPT_DIR}/kokoro-pins.sh"
 
@@ -75,13 +76,23 @@ download_url() {
   local output_path="$3"
   local url="${HF_BASE_URL}/resolve/${revision}/${remote_path}?download=true"
 
+  mkdir -p "$(dirname "${output_path}")"
+
+  if [[ -s "${output_path}" ]]; then
+    echo "resuming: ${remote_path} ($(size_of "${output_path}") bytes already downloaded)"
+  fi
+
   curl \
     --fail \
     --location \
-    --silent \
+    --http1.1 \
     --show-error \
-    --retry 3 \
-    --retry-delay 1 \
+    --progress-bar \
+    --retry 12 \
+    --retry-all-errors \
+    --retry-delay 2 \
+    --connect-timeout 30 \
+    --continue-at - \
     --output "${output_path}" \
     "${url}"
 }
@@ -270,8 +281,8 @@ PY
 
 mkdir -p "${ASSET_ROOT}"
 
-STAGE_ROOT="${TMP_DIR}/staged"
-mkdir -p "${STAGE_ROOT}"
+CACHE_ROOT="${DOWNLOAD_CACHE_ROOT}/${ARTIFACT_REVISION}"
+mkdir -p "${CACHE_ROOT}"
 TAB="$(printf '\t')"
 
 verified_count=0
@@ -299,9 +310,13 @@ while IFS="${TAB}" read -r expected_sha expected_bytes local_path remote_path; d
     exit 1
   fi
 
-  staged_file="${STAGE_ROOT}/${local_path}"
-  mkdir -p "$(dirname "${staged_file}")"
-  download_url "${ARTIFACT_REVISION}" "${remote_path}" "${staged_file}"
+  staged_file="${CACHE_ROOT}/${local_path}.part"
+
+  if verify_file "${staged_file}" "${expected_sha}" "${expected_bytes}"; then
+    echo "cached + verified: ${local_path}"
+  else
+    download_url "${ARTIFACT_REVISION}" "${remote_path}" "${staged_file}"
+  fi
 
   if ! verify_file "${staged_file}" "${expected_sha}" "${expected_bytes}"; then
     echo "error: downloaded asset failed verification: ${local_path}" >&2
@@ -333,7 +348,7 @@ if [[ "${MODE}" == "download" ]]; then
   while IFS="${TAB}" read -r _ _ local_path _; do
     [[ -n "${local_path}" ]] || continue
 
-    staged_file="${STAGE_ROOT}/${local_path}"
+    staged_file="${CACHE_ROOT}/${local_path}.part"
     [[ -f "${staged_file}" ]] || continue
 
     destination="${ASSET_ROOT}/${local_path}"
