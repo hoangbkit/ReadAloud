@@ -6,21 +6,6 @@ source "${SCRIPT_DIR}/kokoro-pins.sh"
 
 ASSET_ROOT="${SRCROOT}/Resources/Kokoro"
 MANIFEST="${ASSET_ROOT}/KokoroRuntimeManifest.json"
-SDK_ROOT="${SRCROOT}/Vendor/kokoro-coreml"
-
-SDK_HEAD="${SDK_ROOT}/.git/HEAD"
-if [[ ! -f "${SDK_HEAD}" ]]; then
-  echo "error: Kokoro SDK checkout is missing. Run: bash scripts/download-kokoro-sdk.sh" >&2
-  exit 1
-fi
-
-IFS= read -r ACTUAL_SDK_COMMIT < "${SDK_HEAD}"
-if [[ "${ACTUAL_SDK_COMMIT}" != "${KOKORO_SDK_COMMIT}" ]]; then
-  echo "error: Kokoro SDK checkout does not match the pinned commit" >&2
-  echo "expected: ${KOKORO_SDK_COMMIT}" >&2
-  echo "actual:   ${ACTUAL_SDK_COMMIT}" >&2
-  exit 1
-fi
 
 if [[ ! -f "${MANIFEST}" ]]; then
   echo "error: Kokoro assets are missing. Run: bash scripts/download-kokoro-assets.sh" >&2
@@ -47,7 +32,7 @@ expected_voices = [
 if manifest.get("bundle_profile") != "custom":
     raise SystemExit("error: unexpected Kokoro runtime manifest profile")
 if manifest.get("sdk_commit") != expected_sdk_commit:
-    raise SystemExit("error: Kokoro runtime manifest SDK commit does not match vendored SDK")
+    raise SystemExit("error: Kokoro runtime manifest SDK commit does not match the pinned runtime contract")
 if manifest.get("hf_provenance_verified") is not True:
     raise SystemExit("error: Kokoro runtime manifest provenance is not verified")
 if len(manifest.get("readaloud_source_manifest_sha256", "")) != 64:

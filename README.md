@@ -12,34 +12,27 @@ Minimal iOS prototype for local Kokoro Core ML text-to-speech.
 
 ## Kokoro SDK
 
-ReadAloud uses the upstream `KokoroTTS` Swift SDK from
-`mattmireles/kokoro-coreml`. The source checkout is intentionally not
-committed into this repository.
+ReadAloud consumes the `KokoroTTS` product from the sibling local
+`KokoroCoreML` Swift package.
 
-Fetch the pinned SDK source before generating the Xcode project:
+Keep the repositories next to each other:
 
-```bash
-bash scripts/download-kokoro-sdk.sh
+```text
+Developer/
+├── KokoroCoreML/
+└── ReadAloud/
 ```
 
-Or prepare both the SDK and verified Kokoro assets in one step:
+Prepare the verified Kokoro assets with:
 
 ```bash
 bash scripts/bootstrap.sh
 ```
 
-The script pins upstream commit
-`523abafac0e3a82a443b0c2b4543396d7229a914` and checks out only the upstream
-`swift/` and `swift-tts/` package trees under `Vendor/kokoro-coreml/`.
-That commit is the SDK revision declared by the pinned full runtime manifest,
-so source and model/runtime metadata stay on the same published contract.
-The upstream `swift-tts` package owns Misaki phonemization and pins its own
-MisakiSwift dependency.
-
 XcodeGen consumes the local package at:
 
 ```text
-Vendor/kokoro-coreml/swift-tts
+../KokoroCoreML
 ```
 
 ## Kokoro assets

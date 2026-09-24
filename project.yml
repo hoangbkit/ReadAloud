@@ -11,15 +11,15 @@ settings:
     DEVELOPMENT_TEAM: J458WW3452
     SWIFT_VERSION: 6.0
     SWIFT_STRICT_CONCURRENCY: complete
-    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
 
 configs:
   Debug: debug
   Release: release
 
 packages:
-  KokoroTTS:
-    path: Vendor/kokoro-coreml/swift-tts
+  KokoroCoreML:
+    path: ../KokoroCoreML
 
 targets:
   ReadAloud:
@@ -39,10 +39,9 @@ targets:
           - $(SRCROOT)/Resources/Kokoro
           - $(SRCROOT)/scripts/validate-kokoro-assets-for-build.sh
           - $(SRCROOT)/scripts/kokoro-pins.sh
-          - $(SRCROOT)/Vendor/kokoro-coreml/.git/HEAD
         basedOnDependencyAnalysis: false
     dependencies:
-      - package: KokoroTTS
+      - package: KokoroCoreML
         product: KokoroTTS
     settings:
       base:
