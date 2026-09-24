@@ -312,6 +312,14 @@ while IFS="${TAB}" read -r expected_sha expected_bytes local_path remote_path; d
 
   staged_file="${CACHE_ROOT}/${local_path}.part"
 
+  if [[ -f "${staged_file}" ]]; then
+    staged_bytes="$(size_of "${staged_file}")"
+    if (( staged_bytes >= expected_bytes )) && ! verify_file "${staged_file}" "${expected_sha}" "${expected_bytes}"; then
+      echo "discarding invalid cached partial: ${local_path}"
+      rm -f "${staged_file}"
+    fi
+  fi
+
   if verify_file "${staged_file}" "${expected_sha}" "${expected_bytes}"; then
     echo "cached + verified: ${local_path}"
   else
